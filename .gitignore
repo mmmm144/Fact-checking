@@ -1,0 +1,9 @@
+# Security - Never push active cookies/sessions
+facebook_cookies.json
+
+# Output cache / Temp files
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
