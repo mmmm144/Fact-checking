@@ -9,8 +9,10 @@ import urllib3
 
 urllib3.disable_warnings()
 
-COOKIE_FILE = "facebook_cookies.json"
-OUTPUT_FILE = "news_website_output.json"
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+COOKIE_FILE = os.path.join(SCRIPT_DIR, '../data/vie/raw/facebook_cookies.json')
+OUTPUT_FILE = os.path.join(SCRIPT_DIR, '../data/vie/raw/news_website_output.json')
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

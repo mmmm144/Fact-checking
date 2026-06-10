@@ -8,7 +8,9 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 
 
-COOKIE_FILE = "facebook_cookies.json"
+import os
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+COOKIE_FILE = os.path.join(SCRIPT_DIR, '../data/vie/raw/facebook_cookies.json')
 
 def init_driver():
 
@@ -156,8 +158,8 @@ def main():
     print("\nTotal links:", len(all_links))
 
     # lưu file
-    save_to_txt(all_links)
-    save_to_csv(all_links)
+    save_to_txt(all_links, os.path.join(SCRIPT_DIR, "../data/vie/raw/facebook_links.txt"))
+    save_to_csv(all_links, os.path.join(SCRIPT_DIR, "../data/vie/raw/facebook_links.csv"))
 
     print("Saved to facebook_links.txt and facebook_links.csv")
 

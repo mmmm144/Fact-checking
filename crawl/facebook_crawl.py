@@ -10,9 +10,13 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 
-COOKIE_FILE = "facebook_cookies.json"
-LINK_FILE = "facebook_links.txt"
-MEDIA_FOLDER = "media"
+
+
+import os
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+COOKIE_FILE = os.path.join(SCRIPT_DIR, '../data/vie/raw/facebook_cookies.json')
+LINK_FILE = os.path.join(SCRIPT_DIR, '../data/vie/raw/facebook_links.txt')
+MEDIA_FOLDER = os.path.join(SCRIPT_DIR, '../data/vie/raw/media')
 
 def init_driver():
     options = webdriver.ChromeOptions()
@@ -355,7 +359,12 @@ def main():
 
     driver.quit()
 
-    output_file = "output.json"
+    output_file = os.path.join(SCRIPT_DIR, '../data/vie/raw/output.json')
+    # Filter out .mp4 files from media list (originally from clean3.py)
+    for entry in results:
+        if 'media' in entry and isinstance(entry['media'], list):
+            entry['media'] = [m for m in entry['media'] if not m.endswith('.mp4')]
+            
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=4)
     print(f"\nDone! Saved {len(results)} posts to {output_file}")

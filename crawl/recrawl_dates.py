@@ -8,9 +8,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-COOKIE_FILE = "facebook_cookies.json"
-INPUT_FILE = "output.json"
-OUTPUT_FILE = "output.json"
+
+
+import os
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+COOKIE_FILE = os.path.join(SCRIPT_DIR, '../data/vie/raw/facebook_cookies.json')
+INPUT_FILE = os.path.join(SCRIPT_DIR, '../data/vie/raw/output.json')
+OUTPUT_FILE = os.path.join(SCRIPT_DIR, '../data/vie/raw/output.json')
 
 def format_fb_date(ts):
     dt = datetime.fromtimestamp(ts)
