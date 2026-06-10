@@ -7,10 +7,23 @@ Semantic Chunking Module for Vietnamese Fact-Checking Dataset Generation
 
 import os
 import re
+import sys
 import json
 import argparse
 import numpy as np
 from typing import List, Dict, Any, Tuple
+
+# Reconfigure stdout and stderr to UTF-8 to prevent encoding errors on Windows terminals
+if sys.stdout.encoding != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
+if sys.stderr.encoding != 'utf-8':
+    try:
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
 from underthesea import sent_tokenize
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
