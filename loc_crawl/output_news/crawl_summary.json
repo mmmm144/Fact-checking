@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-07-24T02:35:09+00:00",
+  "discover_only": false,
+  "combined_count": 5150,
+  "sources": [
+    {
+      "source": "VnExpress",
+      "target": 2600,
+      "existing": 0,
+      "discovered": 3608,
+      "new_candidates": 3608,
+      "added": 2600,
+      "total": 2600,
+      "shortfall": 0,
+      "output": "C:\\NC KHOA HỌC - THẦY LONG\\Fact-checking\\loc_crawl\\output_news\\vnexpress.json"
+    }
+  ]
+}
