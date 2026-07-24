@@ -203,7 +203,7 @@ SOURCES: dict[str, SourceConfig] = {
     "vafc": SourceConfig(
         key="vafc",
         name="VAFC",
-        target=1600,
+        target=2600,
         label="FALSE",
         language="vi",
         allowed_hosts=("tingia.gov.vn", "www.tingia.gov.vn"),
@@ -239,7 +239,7 @@ SOURCES: dict[str, SourceConfig] = {
     "moh": SourceConfig(
         key="moh",
         name="Bộ Y tế",
-        target=1500,
+        target=2500,
         label="TRUE",
         language="vi",
         allowed_hosts=("moh.gov.vn", "www.moh.gov.vn"),
@@ -259,7 +259,7 @@ SOURCES: dict[str, SourceConfig] = {
     "who": SourceConfig(
         key="who",
         name="WHO",
-        target=1400,
+        target=2400,
         label="TRUE",
         language="en",
         allowed_hosts=("who.int", "www.who.int"),
@@ -285,7 +285,7 @@ SOURCES: dict[str, SourceConfig] = {
     "gso": SourceConfig(
         key="gso",
         name="GSO/NSO Việt Nam",
-        target=1200,
+        target=2500,
         label="TRUE",
         language="vi",
         allowed_hosts=("gso.gov.vn", "www.gso.gov.vn", "nso.gov.vn", "www.nso.gov.vn"),

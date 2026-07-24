@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-07-24T14:44:48+00:00",
+  "discover_only": false,
+  "combined_count": 7235,
+  "sources": [
+    {
+      "source": "GSO/NSO Việt Nam",
+      "target": 2500,
+      "existing": 0,
+      "discovered": 4059,
+      "new_candidates": 4059,
+      "added": 2500,
+      "total": 2500,
+      "shortfall": 0,
+      "output": "C:\\NC KHOA HỌC - THẦY LONG\\Fact-checking\\loc_crawl\\output\\gso.json"
+    }
+  ]
+}
