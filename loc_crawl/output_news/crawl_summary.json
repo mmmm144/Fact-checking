@@ -1,18 +1,18 @@
 {
-  "generated_at": "2026-07-24T02:35:09+00:00",
+  "generated_at": "2026-07-24T16:55:32+00:00",
   "discover_only": false,
-  "combined_count": 5150,
+  "combined_count": 6500,
   "sources": [
     {
-      "source": "VnExpress",
-      "target": 2600,
-      "existing": 0,
-      "discovered": 3608,
-      "new_candidates": 3608,
-      "added": 2600,
-      "total": 2600,
+      "source": "World Bank",
+      "target": 1400,
+      "existing": 15,
+      "discovered": 12641,
+      "new_candidates": 12626,
+      "added": 1385,
+      "total": 1400,
       "shortfall": 0,
-      "output": "C:\\NC KHOA HỌC - THẦY LONG\\Fact-checking\\loc_crawl\\output_news\\vnexpress.json"
+      "output": "/Users/ai/Documents/HCMUS/NCKH/crawl/loc_crawl/output_news/world_bank.json"
     }
   ]
 }

@@ -99,6 +99,7 @@ NEWS_SOURCES: dict[str, SourceConfig] = {
             ".lpb-article-content",
             ".article-body",
             "main article",
+            ".custom-text",
         ),
         evidence="Article published on the official World Bank website.",
     ),
