@@ -26,9 +26,9 @@ class FakeResponse:
 
 class NewsCrawlerTests(unittest.TestCase):
     def test_default_targets(self):
-        self.assertEqual(NEWS_SOURCES["world_bank"].target, 1400)
-        self.assertEqual(NEWS_SOURCES["bao_chinh_phu"].target, 1500)
-        self.assertEqual(NEWS_SOURCES["vnexpress"].target, 1600)
+        self.assertEqual(NEWS_SOURCES["world_bank"].target, 3400)
+        self.assertEqual(NEWS_SOURCES["bao_chinh_phu"].target, 2500)
+        self.assertEqual(NEWS_SOURCES["vnexpress"].target, 2600)
 
     def test_requested_category_lists_are_complete(self):
         self.assertEqual(
@@ -59,6 +59,40 @@ class NewsCrawlerTests(unittest.TestCase):
             world_bank_domain("https://www.worldbank.org/en/news/video/2026/07/01/example"),
             "",
         )
+
+    def test_world_bank_opinion_article_date_parsing(self):
+        from crawl_sources import parse_article
+        config = NEWS_SOURCES["world_bank"]
+        html = b"""<html><head>
+        <script type='application/ld+json'>
+        {"@context": "https://schema.org",
+         "@type": "OpinionNewsArticle",
+         "headline": "Panama's challenge: growing with the best human talent",
+         "datePublished": "2026-03-04T14:35:14.396"}
+        </script></head><body>
+        <main><article class="lp-body-content">
+        This is a sufficiently long body content to satisfy the length check of 150 characters.
+        This is a sufficiently long body content to satisfy the length check of 150 characters.
+        </article></main>
+        </body></html>"""
+        item = parse_article(html, "https://www.worldbank.org/en/news/opinion/2026/03/04/el-desafio-panama-crecer-con-mejor-talento-humano", config)
+        self.assertIsNotNone(item)
+        self.assertEqual(item["publish_date"], "2026-03-04")
+
+    def test_world_bank_date_fallback_from_url(self):
+        from crawl_sources import parse_article
+        config = NEWS_SOURCES["world_bank"]
+        # HTML without any JSON-LD or meta tags or time tags
+        html = b"""<html><body>
+        <h1>A sufficiently long article title</h1>
+        <main><article class="lp-body-content">
+        This is a sufficiently long body content to satisfy the length check of 150 characters.
+        This is a sufficiently long body content to satisfy the length check of 150 characters.
+        </article></main>
+        </body></html>"""
+        item = parse_article(html, "https://www.worldbank.org/en/news/opinion/2026/03/04/el-desafio-panama-crecer-con-mejor-talento-humano", config)
+        self.assertIsNotNone(item)
+        self.assertEqual(item["publish_date"], "2026-03-04")
 
     def test_zone_id_parser(self):
         html = '<input name="hdZoneId" id="hdZoneId" value="102442">'

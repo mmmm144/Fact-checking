@@ -980,8 +980,12 @@ def extract_article_jsonld(soup: BeautifulSoup) -> dict[str, Any]:
         for item in walk_json(payload):
             item_type = item.get("@type", "")
             types = set(item_type if isinstance(item_type, list) else [item_type])
-            if types.intersection(ARTICLE_TYPES):
-                if len(str(item.get("articleBody", ""))) > len(str(best.get("articleBody", ""))):
+            is_article = types.intersection(ARTICLE_TYPES) or any(
+                isinstance(t, str) and (t.endswith("Article") or t == "BlogPosting")
+                for t in types
+            )
+            if is_article:
+                if not best or len(str(item.get("articleBody", ""))) > len(str(best.get("articleBody", ""))):
                     best = item
     return best
 
@@ -1179,6 +1183,11 @@ def parse_article(
             raw_date = compact_text(str(time_tag.get("datetime") or time_tag.get_text(" ", strip=True)))
     if not raw_date:
         raw_date = first_text(soup, (".post-meta", ".date", ".publish-date", ".article-date", ".time"))
+    if not raw_date:
+        # Extract date from URL path if it contains standard YYYY/MM/DD or YYYY-MM-DD
+        match = re.search(r"/(\d{4})/(\d{2})/(\d{2})/", url)
+        if match:
+            raw_date = f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
 
     category = extract_domain(soup, jsonld, url, config, fallback_domain)
 
