@@ -57,22 +57,21 @@ This dataset is a clean, standardized, and unified **Vietnamese Evidence Corpus 
 
 ## Dataset Statistics
 
-- **Total Documents**: 13,686
-- **Unique Documents**: 13,572 (114 duplicates flagged with `quality.duplicate: true`)
+- **Total Documents**: 13,572 (frozen unique records, duplicates filtered out)
 - **Languages**: ~70% Vietnamese (`vi`), ~30% English (`en`)
-- **Size**: 115.61 MB
+- **Size**: 115.33 MB
 
 ### Documents by Source
 
 | Source Name | Source Type | Domain | Doc Type | Count |
 | :--- | :--- | :--- | :--- | :--- |
-| **GSO** | Government | Economy | Statistics | 2,500 |
+| **GSO** | Government | Economy | Statistics | 2,393 |
 | **WHO** | International Org | Health | Report | 2,400 |
-| **MOH** | Government | Health | Guideline | 1,802 |
-| **World Bank** | International Org | Economy | Report | 1,399 |
+| **MOH** | Government | Health | Guideline | 1,799 |
+| **World Bank** | International Org | Economy | Report | 1,397 |
 | **Báo Chính phủ** | Government | Government & Policy | News | 2,500 |
 | **VnExpress** | News Agency | General News | News | 2,600 |
-| **VAFC** | Fact Checking Portal | Fact Checking | Debunking | 485 |
+| **VAFC** | Fact Checking Portal | Fact Checking | Debunking | 483 |
 
 ---
 

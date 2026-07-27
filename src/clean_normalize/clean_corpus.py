@@ -322,7 +322,7 @@ def clean_single_record(raw_item: dict[str, Any], config: dict[str, Any], crawl_
         "document_type": doc_type,
         "language": lang,
         "country": country,
-        "publish_date": pub_date if pub_date else None,
+        "publish_date": pub_date if pub_date else crawl_date_str,
         "crawl_date": crawl_date_str,
         "url": url,
         "author": None,
@@ -412,13 +412,14 @@ def execute_pipeline(project_root_path: Path) -> None:
     LOGGER.info("  - Missing claim/title:    %d", discarded_stats["missing_title"])
     LOGGER.info("  - Processing exceptions:  %d", discarded_stats["failed_parse"])
     
-    # Save output corpus
+    # Save output corpus - filtering out duplicates
+    final_records = [item for item in processed_records if not item["quality"]["duplicate"]]
     output_path = project_root_path / "src" / "clean_normalize" / "output" / "corpus_v1.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    LOGGER.info("Writing clean standardized corpus to: %s", output_path)
+    LOGGER.info("Writing clean standardized corpus (deduplicated) to: %s", output_path)
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(processed_records, f, ensure_ascii=False, indent=4)
+        json.dump(final_records, f, ensure_ascii=False, indent=4)
         
     LOGGER.info("Evidence Corpus v1.0 compiled successfully! Output size: %.2f MB", output_path.stat().st_size / (1024**2))
 
