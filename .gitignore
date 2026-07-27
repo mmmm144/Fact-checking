@@ -8,3 +8,4 @@ env/
 venv/
 data/vie/raw/facebook_cookies.json 
 src/clean_normalize/output/corpus_v1.json
+.env 
