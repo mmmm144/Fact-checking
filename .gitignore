@@ -7,3 +7,4 @@ __pycache__/
 env/
 venv/
 data/vie/raw/facebook_cookies.json 
+loc_crawl/output/corpus_v1.json
