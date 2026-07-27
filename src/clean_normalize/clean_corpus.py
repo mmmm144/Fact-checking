@@ -33,7 +33,7 @@ LOGGER = logging.getLogger("corpus_cleaner")
 SOURCE_CONFIGS = {
     "gso": {
         "title": "GSO",
-        "path": "loc_crawl/output/gso.json",
+        "path": "src/crawl/output/gso.json",
         "source_type": "Government",
         "domain": "Economy",
         "document_type": "Statistics",
@@ -42,7 +42,7 @@ SOURCE_CONFIGS = {
     },
     "moh": {
         "title": "MOH",
-        "path": "loc_crawl/output/moh.json",
+        "path": "src/crawl/output/moh.json",
         "source_type": "Government",
         "domain": "Health",
         "document_type": "Guideline",
@@ -51,7 +51,7 @@ SOURCE_CONFIGS = {
     },
     "vafc": {
         "title": "VAFC",
-        "path": "loc_crawl/output/vafc.json",
+        "path": "src/crawl/output/vafc.json",
         "source_type": "Fact Checking Portal",
         "domain": "Fact Checking",
         "document_type": "Debunking",
@@ -60,7 +60,7 @@ SOURCE_CONFIGS = {
     },
     "who": {
         "title": "WHO",
-        "path": "loc_crawl/output/who.json",
+        "path": "src/crawl/output/who.json",
         "source_type": "International Organization",
         "domain": "Health",
         "document_type": "Report",
@@ -69,7 +69,7 @@ SOURCE_CONFIGS = {
     },
     "bao_chinh_phu": {
         "title": "BaoChinhPhu",
-        "path": "loc_crawl/output_news/bao_chinh_phu.json",
+        "path": "src/crawl/output_news/bao_chinh_phu.json",
         "source_type": "Government",
         "domain": "Government & Policy",
         "document_type": "News",
@@ -78,7 +78,7 @@ SOURCE_CONFIGS = {
     },
     "vnexpress": {
         "title": "VnExpress",
-        "path": "loc_crawl/output_news/vnexpress.json",
+        "path": "src/crawl/output_news/vnexpress.json",
         "source_type": "News Agency",
         "domain": "General News",
         "document_type": "News",
@@ -87,7 +87,7 @@ SOURCE_CONFIGS = {
     },
     "world_bank": {
         "title": "WorldBank",
-        "path": "loc_crawl/output_news/world_bank.json",
+        "path": "src/crawl/output_news/world_bank.json",
         "source_type": "International Organization",
         "domain": "Economy",
         "document_type": "Report",
@@ -413,7 +413,7 @@ def execute_pipeline(project_root_path: Path) -> None:
     LOGGER.info("  - Processing exceptions:  %d", discarded_stats["failed_parse"])
     
     # Save output corpus
-    output_path = project_root_path / "loc_crawl" / "output" / "corpus_v1.json"
+    output_path = project_root_path / "src" / "clean_normalize" / "output" / "corpus_v1.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     LOGGER.info("Writing clean standardized corpus to: %s", output_path)
@@ -426,6 +426,6 @@ def execute_pipeline(project_root_path: Path) -> None:
 if __name__ == "__main__":
     # Find project root
     curr_path = Path(__file__).resolve().parent
-    while curr_path.name and not (curr_path / "loc_crawl").is_dir():
+    while curr_path.name and not (curr_path / "src").is_dir():
         curr_path = curr_path.parent
     execute_pipeline(curr_path)

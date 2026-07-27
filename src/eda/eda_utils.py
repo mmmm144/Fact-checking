@@ -36,31 +36,31 @@ EXPECTED_COLUMNS = [
 SOURCE_CONFIGS = {
     "gso": {
         "title": "GSO/NSO Việt Nam",
-        "path": "loc_crawl/output/gso.json",
+        "path": "src/crawl/output/gso.json",
     },
     "moh": {
         "title": "Bộ Y tế (MOH)",
-        "path": "loc_crawl/output/moh.json",
+        "path": "src/crawl/output/moh.json",
     },
     "vafc": {
         "title": "VAFC / tingia.gov.vn",
-        "path": "loc_crawl/output/vafc.json",
+        "path": "src/crawl/output/vafc.json",
     },
     "who": {
         "title": "World Health Organization (WHO)",
-        "path": "loc_crawl/output/who.json",
+        "path": "src/crawl/output/who.json",
     },
     "bao_chinh_phu": {
         "title": "Báo Chính phủ",
-        "path": "loc_crawl/output_news/bao_chinh_phu.json",
+        "path": "src/crawl/output_news/bao_chinh_phu.json",
     },
     "vnexpress": {
         "title": "VnExpress",
-        "path": "loc_crawl/output_news/vnexpress.json",
+        "path": "src/crawl/output_news/vnexpress.json",
     },
     "world_bank": {
         "title": "World Bank",
-        "path": "loc_crawl/output_news/world_bank.json",
+        "path": "src/crawl/output_news/world_bank.json",
     },
 }
 
@@ -96,10 +96,10 @@ def find_project_root(start: str | Path | None = None) -> Path:
     """Find the repository root whether Jupyter starts at root or notebook dir."""
     start_path = Path(start or Path.cwd()).resolve()
     for candidate in (start_path, *start_path.parents):
-        if (candidate / "loc_crawl").is_dir():
+        if (candidate / "src").is_dir():
             return candidate
     raise FileNotFoundError(
-        "Không tìm thấy thư mục 'loc_crawl'. "
+        "Không tìm thấy thư mục 'src'. "
         "Hãy chạy notebook từ repository Fact-checking hoặc thư mục con của nó."
     )
 

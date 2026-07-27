@@ -538,7 +538,7 @@ def load_domain_history() -> dict[str, str]:
         if _DOMAIN_HISTORY is not None:
             return _DOMAIN_HISTORY
         mapping: dict[str, str] = {}
-        project_root = Path(__file__).resolve().parent.parent
+        project_root = Path(__file__).resolve().parent.parent.parent
         paths = (
             project_root / "data" / "vie" / "raw" / "news_website_output.json",
             project_root / "data" / "vie" / "processed" / "fact_checking_dataset.json",
