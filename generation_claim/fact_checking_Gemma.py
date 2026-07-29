@@ -1,6 +1,6 @@
 """
 Fact-checking claim generation script for Vietnamese Evidence Corpus v1.0.
-Reads corpus_v1.json, calls Qwen2.5 7B Instruct through local Ollama,
+Reads corpus_v1.json, calls Gemma 3 4B through local Ollama,
 validates JSON and saves results separately from API-generated results.
 
 Features:
@@ -25,14 +25,14 @@ from pathlib import Path
 
 
 # ─── Configuration ───────────────────────────────────────────────────────────
-MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b-instruct")
+MODEL = os.environ.get("OLLAMA_MODEL", "gemma3:4b")
 API_URL = os.environ.get("OLLAMA_API_URL", "http://localhost:11434/api/chat")
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 INPUT_FILE = PROJECT_ROOT / "data" / "vie" / "raw" / "viet-fact-checking" / "corpus_v1.json"
-OUTPUT_FILE = SCRIPT_DIR / "claims_corpus_v1_qwen2_5_7b_instruct.json"
-DEBUG_LOG_FILE = SCRIPT_DIR / "debug_invalid_json_qwen2_5_7b_instruct.log"
-FAILED_IDS_FILE = SCRIPT_DIR / "failed_ids_qwen2_5_7b_instruct.json"
+OUTPUT_FILE = SCRIPT_DIR / "claims_corpus_v1_gemma3_4b.json"
+DEBUG_LOG_FILE = SCRIPT_DIR / "debug_invalid_json_gemma3_4b.log"
+FAILED_IDS_FILE = SCRIPT_DIR / "failed_ids_gemma3_4b.json"
 MAX_RETRIES = 5
 RETRY_DELAY_BASE = 3  # seconds, exponential backoff
 DEFAULT_REQUEST_DELAY = 0.0
@@ -199,7 +199,7 @@ def ensure_ollama_ready() -> None:
 
 
 def call_ollama_api(user_prompt: str) -> str:
-    """Call Qwen through Ollama's local chat API with JSON output enabled."""
+    """Call Gemma through Ollama's local chat API with JSON output enabled."""
     payload = {
         "model": MODEL,
         "messages": [

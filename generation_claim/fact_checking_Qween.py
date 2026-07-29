@@ -1,12 +1,12 @@
 """
 Fact-checking claim generation script for Vietnamese Evidence Corpus v1.0.
-Reads corpus_v1.json, calls Qwen2.5 7B Instruct through local Ollama,
+Reads corpus_v1.json and calls Qwen3.5 through a vLLM OpenAI-compatible server.
 validates JSON and saves results separately from API-generated results.
 
 Features:
 - Auto-retry on invalid JSON response from model
-- Resume support: skips articles already present in the output file
-- Structured JSON validation against expected schema
+- Resume and sharding support for time-limited Kaggle sessions
+- Strict JSON and verbatim-evidence validation against the source article
 - Debug logging for invalid responses -> debug_invalid_json.log
 - Failed article IDs saved to failed_ids.json
 - Fallback to justification if original_text is too short
@@ -25,18 +25,24 @@ from pathlib import Path
 
 
 # ─── Configuration ───────────────────────────────────────────────────────────
-MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b-instruct")
-API_URL = os.environ.get("OLLAMA_API_URL", "http://localhost:11434/api/chat")
+MODEL = os.environ.get("MODEL_ID", "Qwen/Qwen3.5-35B-A3B-GPTQ-Int4")
+API_URL = os.environ.get("VLLM_API_URL", "http://127.0.0.1:8000/v1/chat/completions")
+API_KEY = os.environ.get("VLLM_API_KEY", "")
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
+IS_KAGGLE = Path("/kaggle/working").is_dir()
+WORK_DIR = Path("/kaggle/working") if IS_KAGGLE else SCRIPT_DIR
 INPUT_FILE = PROJECT_ROOT / "data" / "vie" / "raw" / "viet-fact-checking" / "corpus_v1.json"
-OUTPUT_FILE = SCRIPT_DIR / "claims_corpus_v1_qwen2_5_7b_instruct.json"
-DEBUG_LOG_FILE = SCRIPT_DIR / "debug_invalid_json_qwen2_5_7b_instruct.log"
-FAILED_IDS_FILE = SCRIPT_DIR / "failed_ids_qwen2_5_7b_instruct.json"
-MAX_RETRIES = 5
-RETRY_DELAY_BASE = 3  # seconds, exponential backoff
+OUTPUT_FILE = WORK_DIR / "claims_corpus_v1_qwen3_5_35b_a3b_gptq_int4.json"
+DEBUG_LOG_FILE = WORK_DIR / "debug_invalid_json_qwen3_5_35b_a3b_gptq_int4.log"
+FAILED_IDS_FILE = WORK_DIR / "failed_ids_qwen3_5_35b_a3b_gptq_int4.json"
+MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "5"))
+RETRY_DELAY_BASE = 3
 DEFAULT_REQUEST_DELAY = 0.0
-MIN_TEXT_LENGTH = 50  # If original_text shorter than this, use justification
+MAX_OUTPUT_TOKENS = int(os.environ.get("MAX_OUTPUT_TOKENS", "3072"))
+MAX_INPUT_CHARS = int(os.environ.get("MAX_INPUT_CHARS", "16000"))
+REQUEST_TIMEOUT = int(os.environ.get("VLLM_REQUEST_TIMEOUT", "1800"))
+MIN_TEXT_LENGTH = 50
 
 # ─── System Prompt ───────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """Bạn là một chuyên gia dữ liệu và kiểm chứng thông tin (Fact-checker). Nhiệm vụ của bạn là đọc nội dung bài viết tôi cung cấp và tự động sinh ra các nhận định (claims) thuộc 3 loại: SUPPORTED (Đúng), REFUTED (Sai) và NOT_ENOUGH_INFO (Không đủ thông tin).
@@ -53,6 +59,11 @@ YÊU CẦU LÕI:
 2. REFUTED: Sinh ra 2 claim cung cấp thông tin sai lệch, trái ngược hoàn toàn với chi tiết trong bài viết.
 3. NOT_ENOUGH_INFO: Sinh ra 2 claim có vẻ liên quan đến chủ đề bài viết nhưng KHÔNG THỂ tìm thấy bằng chứng xác nhận hay bác bỏ trong nội dung bài.
 4. Mọi bằng chứng (evidence -> quote) bắt buộc phải trích dẫn Y NGUYÊN TỪNG CHỮ từ bài viết gốc.
+5. Mỗi claim phải đơn nhất, cụ thể, tự đứng độc lập và không gộp nhiều sự kiện không liên quan.
+6. Mỗi quote phải là 1-2 câu ngắn nhất đủ để kiểm chứng claim; tuyệt đối không diễn giải lại quote.
+7. REFUTED phải thay đổi một chi tiết cốt lõi có thể bác bỏ trực tiếp bằng quote, không tạo câu sai vô nghĩa.
+8. NOT_ENOUGH_INFO phải nêu rõ thông tin cụ thể nào còn thiếu; quote chỉ cung cấp ngữ cảnh liên quan.
+9. Chính tả tên riêng, con số, ngày tháng và đơn vị trong claim phải được kiểm tra kỹ theo bài gốc.
 
 ĐỊNH DẠNG ĐẦU RA (OUTPUT FORMAT):
 Bạn CHỈ ĐƯỢC PHÉP trả về duy nhất một chuỗi JSON hợp lệ, tuyệt đối không giải thích thêm, không dùng markdown ```json...``` bao quanh. Cấu trúc JSON đầu ra bắt buộc phải tuân theo format mẫu sau:
@@ -148,58 +159,49 @@ Bạn CHỈ ĐƯỢC PHÉP trả về duy nhất một chuỗi JSON hợp lệ, 
 }
 }"""
 
-# ─── Local Ollama Client ────────────────────────────────────────────────────
+# ─── vLLM OpenAI-compatible Client ───────────────────────────────────────────
 
-class OllamaAPIError(RuntimeError):
-    """HTTP/API error returned by the local Ollama server."""
-
+class ModelAPIError(RuntimeError):
+    """HTTP/API error returned by the vLLM server."""
     def __init__(self, status_code: int, message: str):
         super().__init__(f"HTTP {status_code}: {message}")
         self.status_code = status_code
 
 
-def get_ollama_tags_url() -> str:
-    """Build Ollama's model-list endpoint from the configured chat URL."""
-    if "/api/" in API_URL:
-        return API_URL.split("/api/", 1)[0] + "/api/tags"
-    return API_URL.rstrip("/") + "/api/tags"
+def get_models_url() -> str:
+    if "/v1/" in API_URL:
+        return API_URL.split("/v1/", 1)[0] + "/v1/models"
+    return API_URL.rstrip("/") + "/v1/models"
 
 
-def get_installed_ollama_models() -> set[str]:
-    """Return model tags installed in the local Ollama instance."""
-    request = urllib.request.Request(get_ollama_tags_url(), method="GET")
+def get_served_models() -> set[str]:
+    headers = {"Accept": "application/json"}
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
+    request = urllib.request.Request(get_models_url(), headers=headers, method="GET")
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:
+        with urllib.request.urlopen(request, timeout=30) as response:
             response_body = response.read().decode("utf-8", errors="replace")
     except urllib.error.URLError as error:
         raise RuntimeError(
-            "Không kết nối được Ollama tại http://localhost:11434. "
-            "Hãy mở ứng dụng Ollama hoặc chạy: ollama serve"
+            f"Không kết nối được vLLM tại {get_models_url()}. Hãy khởi động vllm serve trước."
         ) from error
-
     try:
         response_data = json.loads(response_body)
-        return {
-            str(item.get("name") or item.get("model") or "")
-            for item in response_data.get("models", [])
-        }
+        return {str(item.get("id") or "") for item in response_data.get("data", []) if isinstance(item, dict)}
     except (json.JSONDecodeError, AttributeError, TypeError) as error:
-        raise RuntimeError(
-            f"Ollama trả về danh sách model không hợp lệ: {response_body[:500]}"
-        ) from error
+        raise RuntimeError(f"vLLM trả về danh sách model không hợp lệ: {response_body[:500]}") from error
 
 
-def ensure_ollama_ready() -> None:
-    """Fail early with a useful command if the configured model is missing."""
-    installed_models = get_installed_ollama_models()
-    if MODEL not in installed_models:
+def ensure_server_ready() -> None:
+    served_models = get_served_models()
+    if MODEL not in served_models:
         raise ModelUnavailableError(
-            f"Chưa cài model {MODEL}. Hãy chạy: ollama pull {MODEL}"
+            f"vLLM chưa phục vụ model {MODEL}. Models hiện có: {sorted(served_models)}"
         )
 
 
-def call_ollama_api(user_prompt: str) -> str:
-    """Call Qwen through Ollama's local chat API with JSON output enabled."""
+def call_model_api(user_prompt: str) -> str:
     payload = {
         "model": MODEL,
         "messages": [
@@ -207,61 +209,51 @@ def call_ollama_api(user_prompt: str) -> str:
             {"role": "user", "content": user_prompt},
         ],
         "stream": False,
-        "format": "json",
-        "keep_alive": "30m",
-        "options": {
-            "temperature": 0.2,
-            "num_ctx": 32768,
-            "num_predict": 8192,
-        },
+        "temperature": 0.15,
+        "top_p": 0.9,
+        "max_tokens": MAX_OUTPUT_TOKENS,
+        "seed": 42,
+        "response_format": {"type": "json_object"},
+        "chat_template_kwargs": {"enable_thinking": False},
     }
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
     request = urllib.request.Request(
         API_URL,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
+        headers=headers,
         method="POST",
     )
-
     try:
-        with urllib.request.urlopen(request, timeout=1800) as response:
+        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
             response_body = response.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as error:
         response_body = error.read().decode("utf-8", errors="replace")
         try:
             error_data = json.loads(response_body)
-            message = str(error_data.get("error") or error_data)
+            detail = error_data.get("error") or error_data
+            message = detail.get("message") if isinstance(detail, dict) else str(detail)
         except json.JSONDecodeError:
             message = response_body or str(error)
-        raise OllamaAPIError(error.code, message) from error
+        raise ModelAPIError(error.code, str(message)) from error
     except urllib.error.URLError as error:
-        raise RuntimeError(
-            "Mất kết nối với Ollama. Hãy chắc chắn ứng dụng Ollama đang chạy."
-        ) from error
-
+        raise RuntimeError(f"Mất kết nối với vLLM tại {API_URL}. Kiểm tra vllm.log.") from error
     try:
         response_data = json.loads(response_body)
-        content = response_data["message"]["content"]
-    except (json.JSONDecodeError, KeyError, TypeError) as error:
-        raise RuntimeError(
-            f"Ollama trả về response không đúng định dạng: {response_body[:1000]}"
-        ) from error
-
+        content = response_data["choices"][0]["message"]["content"]
+    except (json.JSONDecodeError, KeyError, IndexError, TypeError) as error:
+        raise RuntimeError(f"vLLM trả về response không đúng định dạng: {response_body[:1000]}") from error
     return str(content or "")
 
 
 def is_model_unavailable_error(error: Exception) -> bool:
-    """Return True when Ollama reports that the requested model is missing."""
     message = f"{type(error).__name__}: {error}".lower()
-    return (
-        isinstance(error, OllamaAPIError) and error.status_code == 404
-    ) or ("model" in message and "not found" in message)
+    return isinstance(error, ModelAPIError) and error.status_code == 404 and "model" in message
 
 
 class ModelUnavailableError(RuntimeError):
-    """Raised when the configured Ollama model is not installed."""
+    """Raised when the configured model is not served by vLLM."""
 
 # ─── Helper Functions ────────────────────────────────────────────────────────
 
@@ -341,29 +333,40 @@ def normalize_date(date_value) -> str:
 
 
 def get_article_content(article: dict) -> str:
-    """Get the best available text content from article.
-    Falls back to justification if original_text is too short."""
-    original = article.get("original_text", "") or ""
-    justification = article.get("justification", "") or ""
-
-    # If original_text is too short, combine with justification
+    """Get the complete source text used for validation and output."""
+    original = str(article.get("original_text", "") or "").strip()
+    justification = str(article.get("justification", "") or "").strip()
     if len(original) < MIN_TEXT_LENGTH and len(justification) > len(original):
         return justification
-    # If both exist and original is short, combine them
     if len(original) < MIN_TEXT_LENGTH:
-        combined = f"{original}\n\n{justification}".strip()
-        return combined if combined else original
+        return f"{original}\n\n{justification}".strip()
     return original
 
 
+def get_prompt_content(article: dict) -> tuple[str, bool]:
+    """Fit unusually long articles into the constrained Kaggle context window."""
+    content = get_article_content(article)
+    if MAX_INPUT_CHARS <= 0 or len(content) <= MAX_INPUT_CHARS:
+        return content, False
+    tail_chars = max(2000, MAX_INPUT_CHARS // 4)
+    head_chars = MAX_INPUT_CHARS - tail_chars
+    omitted = len(content) - MAX_INPUT_CHARS
+    clipped = (
+        content[:head_chars]
+        + f"\n\n[ĐÃ LƯỢC {omitted} KÝ TỰ Ở GIỮA DO GIỚI HẠN CONTEXT]\n\n"
+        + content[-tail_chars:]
+    )
+    return clipped, True
+
 def build_user_prompt(article: dict) -> str:
     """Build the user message with article data for the model."""
-    content = get_article_content(article)
+    content, was_truncated = get_prompt_content(article)
     input_data = {
         "id": article.get("id", ""),
         "url": article.get("url", ""),
         "publish_date": article.get("publish_date", ""),
         "original_text": content,
+        "source_truncated_for_context": was_truncated,
     }
     return (
         "DỮ LIỆU ĐẦU VÀO CẦN XỬ LÝ:\n"
@@ -442,245 +445,263 @@ def extract_json_from_response(content: str) -> dict:
     )
 
 
-def validate_output_schema(data: dict, article_id: str) -> list[str]:
-    """
-    Validate that the output matches expected schema.
-    Returns list of validation errors (empty = valid).
-    """
-    errors = []
+def normalize_result_metadata(data: dict, article: dict) -> None:
+    """Force provenance fields to match the input article."""
+    article_id = str(article.get("id", ""))
+    url = str(article.get("url", "") or "")
+    claims = data.get("claims") if isinstance(data, dict) else None
+    if not isinstance(claims, dict):
+        return
+    for label, items in claims.items():
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            item["label"] = label
+            evidence = item.get("evidence")
+            if not isinstance(evidence, list):
+                continue
+            for ev in evidence:
+                if isinstance(ev, dict):
+                    ev["type"] = "text"
+                    ev["article_id"] = article_id
+                    ev["url"] = url
 
-    # Check top-level keys
-    required_top = ["id", "date_iso", "full_text", "claims"]
-    for key in required_top:
+
+def validate_output_schema(data: dict, article: dict) -> list[str]:
+    """Validate schema and require every evidence quote to be verbatim."""
+    errors: list[str] = []
+    article_id = str(article.get("id", ""))
+    source_text = get_article_content(article)
+    if not isinstance(data, dict):
+        return ["Output root is not a JSON object"]
+    for key in ["id", "date_iso", "full_text", "claims"]:
         if key not in data:
             errors.append(f"Missing top-level key: {key}")
-
-    if "claims" not in data:
+    claims = data.get("claims")
+    if not isinstance(claims, dict):
+        errors.append("claims is not an object")
         return errors
 
-    claims = data["claims"]
-    required_labels = ["SUPPORTED", "REFUTED", "NOT_ENOUGH_INFO"]
-    for label in required_labels:
-        if label not in claims:
-            errors.append(f"Missing claims category: {label}")
-            continue
-        claim_list = claims[label]
+    for label in ["SUPPORTED", "REFUTED", "NOT_ENOUGH_INFO"]:
+        claim_list = claims.get(label)
         if not isinstance(claim_list, list):
             errors.append(f"claims.{label} is not a list")
             continue
-        if len(claim_list) < 2:
-            errors.append(f"claims.{label} has {len(claim_list)} items, expected 2")
-            continue
+        if len(claim_list) != 2:
+            errors.append(f"claims.{label} has {len(claim_list)} items, expected exactly 2")
         for i, claim_item in enumerate(claim_list):
-            if "claim" not in claim_item:
-                errors.append(f"claims.{label}[{i}] missing 'claim'")
-            if "evidence" not in claim_item:
-                errors.append(f"claims.{label}[{i}] missing 'evidence'")
-            elif isinstance(claim_item["evidence"], list):
-                for j, ev in enumerate(claim_item["evidence"]):
-                    if "quote" not in ev:
-                        errors.append(f"claims.{label}[{i}].evidence[{j}] missing 'quote'")
-            if "reason" not in claim_item:
-                errors.append(f"claims.{label}[{i}] missing 'reason'")
-
+            path = f"claims.{label}[{i}]"
+            if not isinstance(claim_item, dict):
+                errors.append(f"{path} is not an object")
+                continue
+            claim = claim_item.get("claim")
+            if not isinstance(claim, str) or len(claim.strip()) < 10:
+                errors.append(f"{path}.claim is empty or too short")
+            if claim_item.get("label") != label:
+                errors.append(f"{path}.label must be {label}")
+            reason = claim_item.get("reason")
+            if not isinstance(reason, str) or len(reason.strip()) < 15:
+                errors.append(f"{path}.reason is empty or too short")
+            evidence = claim_item.get("evidence")
+            if not isinstance(evidence, list) or not evidence:
+                errors.append(f"{path}.evidence must be a non-empty list")
+                continue
+            valid_quote_count = 0
+            for j, ev in enumerate(evidence):
+                ev_path = f"{path}.evidence[{j}]"
+                if not isinstance(ev, dict):
+                    errors.append(f"{ev_path} is not an object")
+                    continue
+                quotes = ev.get("quote")
+                if not isinstance(quotes, list) or not quotes:
+                    errors.append(f"{ev_path}.quote must be a non-empty list")
+                    continue
+                for k, quote in enumerate(quotes):
+                    if not isinstance(quote, str) or not quote.strip():
+                        errors.append(f"{ev_path}.quote[{k}] is empty")
+                    elif quote not in source_text:
+                        errors.append(f"{ev_path}.quote[{k}] is not verbatim in article {article_id}")
+                    else:
+                        valid_quote_count += 1
+            if valid_quote_count == 0:
+                errors.append(f"{path} has no valid verbatim evidence quote")
     return errors
 
-
 def call_model_with_validation(article: dict) -> dict:
-    """
-    Call the model, validate JSON output, and retry if invalid.
-    Returns validated result dict.
-    """
-    user_prompt = build_user_prompt(article)
-    article_id = article.get("id", "unknown")
-    result = None
-
+    """Call the model and retry until strict schema/evidence validation passes."""
+    base_prompt = build_user_prompt(article)
+    user_prompt = base_prompt
+    article_id = str(article.get("id", "unknown"))
     for attempt in range(1, MAX_RETRIES + 1):
+        content = ""
         try:
-            content = call_ollama_api(user_prompt)
-
-            # Parse JSON
+            content = call_model_api(user_prompt)
             result = extract_json_from_response(content)
-
-            # Validate schema
-            validation_errors = validate_output_schema(result, article_id)
+            normalize_result_metadata(result, article)
+            validation_errors = validate_output_schema(result, article)
             if validation_errors:
                 error_msg = "; ".join(validation_errors)
-                print(f"  [Attempt {attempt}/{MAX_RETRIES}] Schema validation failed: {error_msg}")
-                log_debug(article_id, attempt, content, f"Schema: {error_msg}")
-                if attempt < MAX_RETRIES:
-                    print(f"  Retrying in {RETRY_DELAY_BASE * attempt}s...")
-                    time.sleep(RETRY_DELAY_BASE * attempt)
-                    continue
-                else:
-                    print(f"  [WARNING] Accepting partial result for {article_id}")
-                    break
-
-            # Ensure consistent id/date/full_text from source
+                print(f"  [Attempt {attempt}/{MAX_RETRIES}] Validation failed: {error_msg}")
+                log_debug(article_id, attempt, content, f"Validation: {error_msg}")
+                if attempt == MAX_RETRIES:
+                    raise RuntimeError(f"Strict validation failed for article {article_id}: {error_msg}")
+                user_prompt = (
+                    base_prompt
+                    + "\n\nLẦN TRƯỚC KHÔNG HỢP LỆ. Tạo lại toàn bộ JSON và sửa:\n- "
+                    + "\n- ".join(validation_errors[:12])
+                    + "\nMọi quote phải sao chép nguyên văn từ original_text."
+                )
+                time.sleep(RETRY_DELAY_BASE * attempt)
+                continue
             result["id"] = article_id
             result["date_iso"] = normalize_date(article.get("publish_date"))
             result["full_text"] = get_article_content(article)
-
             return result
-
-        except json.JSONDecodeError as e:
-            raw = content if 'content' in dir() else "(no content)"
-            print(f"  [Attempt {attempt}/{MAX_RETRIES}] Invalid JSON: {e}")
-            log_debug(article_id, attempt, raw if isinstance(raw, str) else "", str(e))
-            if attempt < MAX_RETRIES:
-                print(f"  Retrying in {RETRY_DELAY_BASE * attempt}s...")
-                time.sleep(RETRY_DELAY_BASE * attempt)
-            else:
+        except json.JSONDecodeError as error:
+            print(f"  [Attempt {attempt}/{MAX_RETRIES}] Invalid JSON: {error}")
+            log_debug(article_id, attempt, content, str(error))
+            if attempt == MAX_RETRIES:
                 raise RuntimeError(
                     f"Failed to get valid JSON for article {article_id} after {MAX_RETRIES} attempts"
-                )
-
-        except Exception as e:
-            print(f"  [Attempt {attempt}/{MAX_RETRIES}] Ollama error: {type(e).__name__}: {e}")
-            log_debug(article_id, attempt, "", f"Ollama error: {type(e).__name__}: {e}")
-
-            if is_model_unavailable_error(e):
-                raise ModelUnavailableError(
-                    f"Model {MODEL} chưa được cài. Hãy chạy: ollama pull {MODEL}"
-                ) from e
-
-            if attempt < MAX_RETRIES:
-                print(f"  Retrying in {RETRY_DELAY_BASE * attempt}s...")
-                time.sleep(RETRY_DELAY_BASE * attempt)
-            else:
+                ) from error
+            user_prompt = base_prompt + "\n\nLần trước JSON bị lỗi. Chỉ trả về đúng một JSON object hợp lệ."
+            time.sleep(RETRY_DELAY_BASE * attempt)
+        except ModelUnavailableError:
+            raise
+        except RuntimeError as error:
+            if str(error).startswith("Strict validation failed"):
+                raise
+            print(f"  [Attempt {attempt}/{MAX_RETRIES}] vLLM error: {type(error).__name__}: {error}")
+            log_debug(article_id, attempt, content, f"vLLM error: {type(error).__name__}: {error}")
+            if is_model_unavailable_error(error):
+                raise ModelUnavailableError(f"Model {MODEL} không được vLLM phục vụ") from error
+            if attempt == MAX_RETRIES:
                 raise RuntimeError(
-                    f"API call failed for article {article_id} after {MAX_RETRIES} attempts: {e}"
-                )
-
-    # Fallback: ensure fields are set even for partial results
-    if result is None:
-        result = {}
-    result["id"] = article_id
-    result["date_iso"] = normalize_date(article.get("publish_date"))
-    result["full_text"] = get_article_content(article)
-    return result
-
+                    f"API call failed for article {article_id} after {MAX_RETRIES} attempts: {error}"
+                ) from error
+            time.sleep(RETRY_DELAY_BASE * attempt)
+    raise RuntimeError(f"Unexpected retry termination for article {article_id}")
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 def main():
+    global DEBUG_LOG_FILE, FAILED_IDS_FILE
     configure_console_encoding()
-
     parser = argparse.ArgumentParser(
-        description="Generate fact-checking claims from Vietnamese Evidence Corpus v1.0."
+        description="Generate Vietnamese fact-checking claims with Qwen3.5 served by vLLM."
     )
     parser.add_argument("--input-file", type=Path, default=INPUT_FILE)
     parser.add_argument("--output-file", type=Path, default=OUTPUT_FILE)
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Process only the first N corpus records (recommended for a test run).",
-    )
-    parser.add_argument(
-        "--request-delay",
-        type=float,
-        default=DEFAULT_REQUEST_DELAY,
-        help=f"Seconds to wait between successful requests (default: {DEFAULT_REQUEST_DELAY}).",
-    )
+    parser.add_argument("--start-index", type=int, default=0,
+                        help="Zero-based index used to split work across Kaggle sessions.")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="Process N records after --start-index.")
+    parser.add_argument("--checkpoint-every", type=int, default=1,
+                        help="Save every N new articles (default: 1).")
+    parser.add_argument("--request-delay", type=float, default=DEFAULT_REQUEST_DELAY)
+    parser.add_argument("--debug-log-file", type=Path, default=DEBUG_LOG_FILE)
+    parser.add_argument("--failed-ids-file", type=Path, default=FAILED_IDS_FILE)
     args = parser.parse_args()
 
+    if args.start_index < 0:
+        parser.error("--start-index cannot be negative")
     if args.limit is not None and args.limit <= 0:
         parser.error("--limit must be greater than 0")
+    if args.checkpoint_every <= 0:
+        parser.error("--checkpoint-every must be greater than 0")
     if args.request_delay < 0:
         parser.error("--request-delay cannot be negative")
 
-    # Check that Ollama is running and the requested local model is installed.
+    DEBUG_LOG_FILE = args.debug_log_file
+    FAILED_IDS_FILE = args.failed_ids_file
+    for path in (args.output_file, DEBUG_LOG_FILE, FAILED_IDS_FILE):
+        path.parent.mkdir(parents=True, exist_ok=True)
+
     try:
-        ensure_ollama_ready()
+        ensure_server_ready()
     except RuntimeError as error:
         print(f"ERROR: {error}")
         sys.exit(1)
-    print(f"Ollama model: {MODEL}")
-    # Load dataset
+    print(f"vLLM model: {MODEL}")
+    print(f"API: {API_URL}")
+
     if not args.input_file.is_file():
         print(f"ERROR: Input dataset not found: {args.input_file}")
         sys.exit(1)
 
     print(f"Loading dataset from {args.input_file}...")
-    raw_records = load_dataset(args.input_file)
+    all_records = load_dataset(args.input_file)
+    raw_records = all_records[args.start_index:]
     if args.limit is not None:
         raw_records = raw_records[:args.limit]
     articles = [
-        normalize_corpus_article(record, index)
+        normalize_corpus_article(record, args.start_index + index)
         for index, record in enumerate(raw_records, start=1)
     ]
-    print(f"Total articles: {len(articles)}")
+    print(
+        f"Dataset: {len(all_records)} | shard start: {args.start_index} | "
+        f"articles this shard: {len(articles)}"
+    )
 
-    # Load existing results for resume
     existing = load_existing_results(args.output_file)
     if existing:
         print(f"Found {len(existing)} already-processed articles. Resuming...")
-
     results = list(existing.values())
     processed_ids = set(existing.keys())
-
-    # Process each article
-    failed_ids = []
+    failed_ids: list[dict] = []
     total = len(articles)
     skipped = 0
+    processed_this_run = 0
 
     for idx, article in enumerate(articles, start=1):
-        article_id = article.get("id", f"unknown_{idx}")
-
-        # Skip if already processed
+        article_id = str(article.get("id", f"unknown_{idx}"))
         if article_id in processed_ids:
             skipped += 1
             continue
-
-        print(f"[{idx}/{total}] Processing: {article_id[:24]}...")
-
+        _, was_truncated = get_prompt_content(article)
+        truncation_note = " [context clipped]" if was_truncated else ""
+        print(f"[{idx}/{total}] Processing: {article_id[:24]}...{truncation_note}")
         try:
             result = call_model_with_validation(article)
             results.append(result)
             processed_ids.add(article_id)
+            processed_this_run += 1
             print(f"  Done ({len(results)} total saved)")
         except KeyboardInterrupt:
             print("\n  Đã nhận Ctrl+C. Đang lưu toàn bộ kết quả đã hoàn thành...")
             break
-        except ModelUnavailableError as e:
-            print(f"  STOPPED: {e}")
-            print("  No more articles will be attempted with this unavailable model.")
+        except ModelUnavailableError as error:
+            print(f"  STOPPED: {error}")
             break
-        except RuntimeError as e:
-            print(f"  FAILED: {e}")
-            failed_ids.append({"id": article_id, "error": str(e)})
+        except RuntimeError as error:
+            print(f"  FAILED: {error}")
+            failed_ids.append({"id": article_id, "error": str(error)})
+            FAILED_IDS_FILE.write_text(
+                json.dumps(failed_ids, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
             continue
 
-        # Save intermediate results every 10 articles
-        if len(results) % 10 == 0:
+        if processed_this_run % args.checkpoint_every == 0:
             save_results(results, args.output_file)
             print(f"  [Checkpoint] Saved {len(results)} results to {args.output_file}")
-
-        # Optional pause between local generations.
         time.sleep(args.request_delay)
 
-    # Final save
     save_results(results, args.output_file)
-
-    # Save failed IDs
-    if failed_ids:
-        with open(FAILED_IDS_FILE, "w", encoding="utf-8") as f:
-            json.dump(failed_ids, f, ensure_ascii=False, indent=2)
-    else:
-        FAILED_IDS_FILE.write_text("[]\n", encoding="utf-8")
-
+    FAILED_IDS_FILE.write_text(
+        json.dumps(failed_ids, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     print(f"\n{'='*60}")
     print("COMPLETE OR SAFELY STOPPED")
-    print(f"  Total articles: {total}")
+    print(f"  Articles in shard: {total}")
     print(f"  Skipped (already done): {skipped}")
-    print(f"  Processed this run: {len(results) - len(existing)}")
+    print(f"  Processed this run: {processed_this_run}")
     print(f"  Total saved: {len(results)}")
     print(f"  Output: {args.output_file}")
     if failed_ids:
         print(f"  FAILED: {len(failed_ids)} articles (see {FAILED_IDS_FILE})")
     print(f"{'='*60}")
-
 
 if __name__ == "__main__":
     main()
