@@ -1,2 +1,4 @@
 beautifulsoup4>=4.12,<5
+google-genai>=1,<2
+huggingface-hub>=0.23,<2
 requests>=2.31,<3
