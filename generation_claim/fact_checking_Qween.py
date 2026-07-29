@@ -25,7 +25,7 @@ from pathlib import Path
 
 
 # ─── Configuration ───────────────────────────────────────────────────────────
-MODEL = os.environ.get("MODEL_ID", "Qwen/Qwen3.5-35B-A3B-GPTQ-Int4")
+MODEL = os.environ.get("MODEL_ID", "Qwen/Qwen3.5-9B")
 API_URL = os.environ.get("VLLM_API_URL", "http://127.0.0.1:8000/v1/chat/completions")
 API_KEY = os.environ.get("VLLM_API_KEY", "")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -33,9 +33,9 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 IS_KAGGLE = Path("/kaggle/working").is_dir()
 WORK_DIR = Path("/kaggle/working") if IS_KAGGLE else SCRIPT_DIR
 INPUT_FILE = PROJECT_ROOT / "data" / "vie" / "raw" / "viet-fact-checking" / "corpus_v1.json"
-OUTPUT_FILE = WORK_DIR / "claims_corpus_v1_qwen3_5_35b_a3b_gptq_int4.json"
-DEBUG_LOG_FILE = WORK_DIR / "debug_invalid_json_qwen3_5_35b_a3b_gptq_int4.log"
-FAILED_IDS_FILE = WORK_DIR / "failed_ids_qwen3_5_35b_a3b_gptq_int4.json"
+OUTPUT_FILE = WORK_DIR / "claims_corpus_v1_qwen3_5_9b.json"
+DEBUG_LOG_FILE = WORK_DIR / "debug_invalid_json_qwen3_5_9b.log"
+FAILED_IDS_FILE = WORK_DIR / "failed_ids_qwen3_5_9b.json"
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "5"))
 RETRY_DELAY_BASE = 3
 DEFAULT_REQUEST_DELAY = 0.0
