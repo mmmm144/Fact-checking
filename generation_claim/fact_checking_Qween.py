@@ -1,6 +1,6 @@
 """
 Fact-checking claim generation script for Vietnamese Evidence Corpus v1.0.
-Reads corpus_v1.json and calls Qwen3.5 through a vLLM OpenAI-compatible server.
+Reads corpus_v1.json and calls Qwen3 through a vLLM OpenAI-compatible server.
 validates JSON and saves results separately from API-generated results.
 
 Features:
@@ -25,7 +25,7 @@ from pathlib import Path
 
 
 # ─── Configuration ───────────────────────────────────────────────────────────
-MODEL = os.environ.get("MODEL_ID", "Qwen/Qwen3.5-9B")
+MODEL = os.environ.get("MODEL_ID", "Qwen/Qwen3-14B-AWQ")
 API_URL = os.environ.get("VLLM_API_URL", "http://127.0.0.1:8000/v1/chat/completions")
 API_KEY = os.environ.get("VLLM_API_KEY", "")
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -33,9 +33,9 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 IS_KAGGLE = Path("/kaggle/working").is_dir()
 WORK_DIR = Path("/kaggle/working") if IS_KAGGLE else SCRIPT_DIR
 INPUT_FILE = PROJECT_ROOT / "data" / "vie" / "raw" / "viet-fact-checking" / "corpus_v1.json"
-OUTPUT_FILE = WORK_DIR / "claims_corpus_v1_qwen3_5_9b.json"
-DEBUG_LOG_FILE = WORK_DIR / "debug_invalid_json_qwen3_5_9b.log"
-FAILED_IDS_FILE = WORK_DIR / "failed_ids_qwen3_5_9b.json"
+OUTPUT_FILE = WORK_DIR / "claims_corpus_v1_qwen3_14b_awq.json"
+DEBUG_LOG_FILE = WORK_DIR / "debug_invalid_json_qwen3_14b_awq.log"
+FAILED_IDS_FILE = WORK_DIR / "failed_ids_qwen3_14b_awq.json"
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "5"))
 RETRY_DELAY_BASE = 3
 DEFAULT_REQUEST_DELAY = 0.0
@@ -590,7 +590,7 @@ def main():
     global DEBUG_LOG_FILE, FAILED_IDS_FILE
     configure_console_encoding()
     parser = argparse.ArgumentParser(
-        description="Generate Vietnamese fact-checking claims with Qwen3.5 served by vLLM."
+        description="Generate Vietnamese fact-checking claims with Qwen3 served by vLLM."
     )
     parser.add_argument("--input-file", type=Path, default=INPUT_FILE)
     parser.add_argument("--output-file", type=Path, default=OUTPUT_FILE)
