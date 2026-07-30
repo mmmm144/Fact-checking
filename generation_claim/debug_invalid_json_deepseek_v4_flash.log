@@ -1,0 +1,115 @@
+
+================================================================================
+Article ID: GSO_1b651511ef5c52ec | Attempt: 1
+Error: API error: XahAPIError: HTTP 403: Yêu cầu đã bị upstream từ chối.
+Raw response (0 chars):
+
+================================================================================
+
+================================================================================
+Article ID: GSO_1b651511ef5c52ec | Attempt: 2
+Error: API error: XahAPIError: HTTP 403: Yêu cầu đã bị upstream từ chối.
+Raw response (0 chars):
+
+================================================================================
+
+================================================================================
+Article ID: GSO_1b651511ef5c52ec | Attempt: 3
+Error: API error: XahAPIError: HTTP 403: Yêu cầu đã bị upstream từ chối.
+Raw response (0 chars):
+
+================================================================================
+
+================================================================================
+Article ID: GSO_1b651511ef5c52ec | Attempt: 1
+Error: API error: XahAPIError: HTTP 403: Yêu cầu đã bị upstream từ chối.
+Raw response (0 chars):
+
+================================================================================
+
+================================================================================
+Article ID: GSO_1b651511ef5c52ec | Attempt: 2
+Error: API error: XahAPIError: HTTP 403: Yêu cầu đã bị upstream từ chối.
+Raw response (0 chars):
+
+================================================================================
+
+================================================================================
+Article ID: GSO_1b651511ef5c52ec | Attempt: 3
+Error: API error: XahAPIError: HTTP 403: Yêu cầu đã bị upstream từ chối.
+Raw response (0 chars):
+
+================================================================================
+
+================================================================================
+Article ID: GSO_1b651511ef5c52ec | Attempt: 4
+Error: API error: XahAPIError: HTTP 403: Yêu cầu đã bị upstream từ chối.
+Raw response (0 chars):
+
+================================================================================
+
+================================================================================
+Article ID: GSO_81c8068fd0442c10 | Attempt: 1
+Error: Cannot extract valid JSON from response: line 1 column 1 (char 0)
+Raw response (29333 chars):
+{
+  "id": "GSO_81c8068fd0442c10",
+  "date_iso": "2026-07-03T00:00:00",
+  "full_text": "1. Tốc độ tăng tổng sản phẩm trong nước\nTổng sản phẩm trong nước (GDP) quý II/2026 đạt mức tăng trưởng khá, với tốc độ tăng ước đạt 8,39% so với cùng kỳ năm trước [1] . Trong đó, khu vực nông, lâm nghiệp và thủy sản tăng 4,06%, đóng góp 5,65% vào mức tăng tổng giá trị tăng thêm của toàn nền kinh tế; khu vực công nghiệp và xây dựng tăng 10,51%, đóng góp 50,07%; khu vực dịch vụ tăng 7,87%, đóng góp 44,28%.\nGDP sáu tháng đầu năm 2026 tăng 8,18% so với cùng kỳ năm trước ( cùng kỳ năm 2025 tăng 7,63%). Trong mức tăng tổng giá trị tăng thêm của toàn nền kinh tế, khu vực nông, lâm nghiệp và thủy sản tăng 3,87%, đóng góp 5,66%; khu vực công nghiệp và xây dựng tăng 9,81%, đóng góp 47,20%; khu vực dịch vụ tăng 8,09%, đóng góp 47,14%.\nTrong khu vực nông, lâm nghiệp và thủy sản, ngành nông nghiệp duy trì tăng trưởng ổn định, đáp ứng nhu cầu tiêu dùng trong nước, đồng thời thị trường xuất khẩu nông sản tiếp tục được mở rộng. Giá trị tăng thêm ngành nông nghiệp sáu tháng đầu năm 2026 tăng 3,57% so với cùng kỳ năm trước, đóng góp 3,83% vào mức tăng tổng giá trị tăng thêm của toàn nền kinh tế; ngành lâm nghiệp tăng 3,98%, đóng góp 0,27%; ngành thủy sản tăng 4,88%, đóng góp 1,56%.\nTrong khu vực công nghiệp và xây dựng, ngành công nghiệp duy trì mức tăng trưởng tích cực nhờ các động lực tăng trưởng được củng cố, sự phục hồi đơn hàng xuất khẩu và hiệu ứng lan tỏa tích cực của đầu tư công. Giá trị tăng thêm toàn ngành công nghiệp sáu tháng đầu năm 2026 tăng 9,86% so với cùng kỳ năm trước, đóng góp 40,35% vào tốc độ tăng tổng giá trị tăng thêm toàn nền kinh tế. Ngành công nghiệp chế biến, chế tạo là động lực tăng trưởng của toàn nền kinh tế với tốc độ tăng 10,23%, đóng góp 33,07%; ngành sản xuất và phân phối điện tăng 9,34%, đóng góp 5,14%; ngành cung cấp nước, quản lý và xử lý rác thải, nước thải tăng 7,72%, đóng góp 0,54%; ngành khai khoáng tăng 6,67%, đóng góp 1,60%. Ngành xây dựng tăng 9,51%, 
+... [truncated, total 29333 chars]
+================================================================================
+
+================================================================================
+Article ID: GSO_3307ac6b95b92eea | Attempt: 1
+Error: Cannot extract valid JSON from response: line 1 column 1 (char 0)
+Raw response (28397 chars):
+{
+"id": "GSO_3307ac6b95b92eea",
+"date_iso": "2026-07-03T00:00:00",
+"full_text": "Điều tra xu hướng sản xuất kinh doanh (SXKD) hằng quý bao gồm 6.222 doanh nghiệp ngành công nghiệp chế biến, chế tạo và 5.982 doanh nghiệp ngành xây dựng được chọn mẫu điều tra, đại diện cho toàn ngành chế biến, chế tạo và xây dựng của 34 tỉnh, thành phố trực thuộc Trung ương. Tổng số doanh nghiệp trả lời trong kỳ điều tra quý II/2026 là 6.110 doanh nghiệp ngành công nghiệp chế biến, chế tạo (chiếm 98,2% số doanh nghiệp được chọn mẫu) và 5.763 doanh nghiệp ngành xây dựng (chiếm 96,3% số doanh nghiệp được chọn mẫu). Báo cáo kết quả điều tra xu hướng SXKD gồm hai phần:\nPhần I: Xu hướng SXKD ngành công nghiệp chế biến, chế tạo , phản ánh nhận định của doanh nghiệp về: (1) Tổng quan chung hoạt động SXKD; (2) Biến động của các yếu tố đầu vào (số lượng đơn đặt hàng, lao động, chi phí sản xuất, công suất sử dụng máy móc, thiết bị); (3) Dự kiến kết quả đầu ra (khối lượng sản xuất, giá bán bình quân của một sản phẩm); (4) Biến động tồn kho (tồn kho thành phẩm, tồn kho nguyên vật liệu); (5) Các yếu tố ảnh hưởng đến hoạt động SXKD của doanh nghiệp và (6) Kiến nghị của doanh nghiệp.\nPhần II: Xu hướng SXKD ngành xây dựng , phản ánh nhận định của doanh nghiệp về: (1) Tổng quan chung hoạt động SXKD; (2) Biến động của các yếu tố đầu vào (lao động, chi phí sản xuất, hợp đồng xây dựng mới, năng lực hoạt động của doanh nghiệp); (3) Vay vốn phục vụ sản xuất kinh doanh; (4) Các yếu tố ảnh hưởng đến hoạt động SXKD của doanh nghiệp và (5) Kiến nghị của doanh nghiệp.\nPHẦN I. XU HƯỚNG SẢN XUẤT KINH DOANH NGÀNH CÔNG NGHIỆP CHẾ BIẾN , CHẾ TẠO\nKết quả điều tra cho thấy hoạt động sản xuất kinh doanh của doanh nghiệp ngành công nghiệp chế biến, chế tạo tiếp tục cải thiện trong quý II/2026 và xu hướng lạc quan được duy trì sang quý III/2026. Cụ thể, có 7 9 ,7% doanh nghiệp đánh giá hoạt động SXKD quý II/202 6 so với quý I/2026 tốt hơn và giữ ổn định (36,3% tốt hơn và 43,4% giữ ổn định), 20,3% doanh nghiệp đánh gi
+... [truncated, total 28397 chars]
+================================================================================
+
+================================================================================
+Article ID: GSO_3307ac6b95b92eea | Attempt: 2
+Error: Cannot extract valid JSON from response: line 1 column 1 (char 0)
+Raw response (29016 chars):
+{
+"id": "GSO_3307ac6b95b92eea",
+"date_iso": "2026-07-03T00:00:00",
+"full_text": "Điều tra xu hướng sản xuất kinh doanh (SXKD) hằng quý bao gồm 6.222 doanh nghiệp ngành công nghiệp chế biến, chế tạo và 5.982 doanh nghiệp ngành xây dựng được chọn mẫu điều tra, đại diện cho toàn ngành chế biến, chế tạo và xây dựng của 34 tỉnh, thành phố trực thuộc Trung ương. Tổng số doanh nghiệp trả lời trong kỳ điều tra quý II/2026 là 6.110 doanh nghiệp ngành công nghiệp chế biến, chế tạo (chiếm 98,2% số doanh nghiệp được chọn mẫu) và 5.763 doanh nghiệp ngành xây dựng (chiếm 96,3% số doanh nghiệp được chọn mẫu). Báo cáo kết quả điều tra xu hướng SXKD gồm hai phần:\nPhần I: Xu hướng SXKD ngành công nghiệp chế biến, chế tạo , phản ánh nhận định của doanh nghiệp về: (1) Tổng quan chung hoạt động SXKD; (2) Biến động của các yếu tố đầu vào (số lượng đơn đặt hàng, lao động, chi phí sản xuất, công suất sử dụng máy móc, thiết bị); (3) Dự kiến kết quả đầu ra (khối lượng sản xuất, giá bán bình quân của một sản phẩm); (4) Biến động tồn kho (tồn kho thành phẩm, tồn kho nguyên vật liệu); (5) Các yếu tố ảnh hưởng đến hoạt động SXKD của doanh nghiệp và (6) Kiến nghị của doanh nghiệp.\nPhần II: Xu hướng SXKD ngành xây dựng , phản ánh nhận định của doanh nghiệp về: (1) Tổng quan chung hoạt động SXKD; (2) Biến động của các yếu tố đầu vào (lao động, chi phí sản xuất, hợp đồng xây dựng mới, năng lực hoạt động của doanh nghiệp); (3) Vay vốn phục vụ sản xuất kinh doanh; (4) Các yếu tố ảnh hưởng đến hoạt động SXKD của doanh nghiệp và (5) Kiến nghị của doanh nghiệp.\nPHẦN I. XU HƯỚNG SẢN XUẤT KINH DOANH NGÀNH CÔNG NGHIỆP CHẾ BIẾN , CHẾ TẠO\nKết quả điều tra cho thấy hoạt động sản xuất kinh doanh của doanh nghiệp ngành công nghiệp chế biến, chế tạo tiếp tục cải thiện trong quý II/2026 và xu hướng lạc quan được duy trì sang quý III/2026. Cụ thể, có 7 9 ,7% doanh nghiệp đánh giá hoạt động SXKD quý II/202 6 so với quý I/2026 tốt hơn và giữ ổn định (36,3% tốt hơn và 43,4% giữ ổn định), 20,3% doanh nghiệp đánh gi
+... [truncated, total 29016 chars]
+================================================================================
+
+================================================================================
+Article ID: GSO_3307ac6b95b92eea | Attempt: 3
+Error: Cannot extract valid JSON from response: line 1 column 1 (char 0)
+Raw response (33872 chars):
+{
+"id": "GSO_3307ac6b95b92eea",
+"date_iso": "2026-07-03T00:00:00",
+"full_text": "Điều tra xu hướng sản xuất kinh doanh (SXKD) hằng quý bao gồm 6.222 doanh nghiệp ngành công nghiệp chế biến, chế tạo và 5.982 doanh nghiệp ngành xây dựng được chọn mẫu điều tra, đại diện cho toàn ngành chế biến, chế tạo và xây dựng của 34 tỉnh, thành phố trực thuộc Trung ương. Tổng số doanh nghiệp trả lời trong kỳ điều tra quý II/2026 là 6.110 doanh nghiệp ngành công nghiệp chế biến, chế tạo (chiếm 98,2% số doanh nghiệp được chọn mẫu) và 5.763 doanh nghiệp ngành xây dựng (chiếm 96,3% số doanh nghiệp được chọn mẫu). Báo cáo kết quả điều tra xu hướng SXKD gồm hai phần:\nPhần I: Xu hướng SXKD ngành công nghiệp chế biến, chế tạo , phản ánh nhận định của doanh nghiệp về: (1) Tổng quan chung hoạt động SXKD; (2) Biến động của các yếu tố đầu vào (số lượng đơn đặt hàng, lao động, chi phí sản xuất, công suất sử dụng máy móc, thiết bị); (3) Dự kiến kết quả đầu ra (khối lượng sản xuất, giá bán bình quân của một sản phẩm); (4) Biến động tồn kho (tồn kho thành phẩm, tồn kho nguyên vật liệu); (5) Các yếu tố ảnh hưởng đến hoạt động SXKD của doanh nghiệp và (6) Kiến nghị của doanh nghiệp.\nPhần II: Xu hướng SXKD ngành xây dựng , phản ánh nhận định của doanh nghiệp về: (1) Tổng quan chung hoạt động SXKD; (2) Biến động của các yếu tố đầu vào (lao động, chi phí sản xuất, hợp đồng xây dựng mới, năng lực hoạt động của doanh nghiệp); (3) Vay vốn phục vụ sản xuất kinh doanh; (4) Các yếu tố ảnh hưởng đến hoạt động SXKD của doanh nghiệp và (5) Kiến nghị của doanh nghiệp.\nPHẦN I. XU HƯỚNG SẢN XUẤT KINH DOANH NGÀNH CÔNG NGHIỆP CHẾ BIẾN , CHẾ TẠO\nKết quả điều tra cho thấy hoạt động sản xuất kinh doanh của doanh nghiệp ngành công nghiệp chế biến, chế tạo tiếp tục cải thiện trong quý II/2026 và xu hướng lạc quan được duy trì sang quý III/2026. Cụ thể, có 7 9 ,7% doanh nghiệp đánh giá hoạt động SXKD quý II/202 6 so với quý I/2026 tốt hơn và giữ ổn định (36,3% tốt hơn và 43,4% giữ ổn định), 20,3% doanh nghiệp đánh gi
+... [truncated, total 33872 chars]
+================================================================================
+
+================================================================================
+Article ID: GSO_3307ac6b95b92eea | Attempt: 4
+Error: Cannot extract valid JSON from response: line 1 column 1 (char 0)
+Raw response (30826 chars):
+{
+"id": "GSO_3307ac6b95b92eea",
+"date_iso": "2026-07-03T00:00:00",
+"full_text": "Điều tra xu hướng sản xuất kinh doanh (SXKD) hằng quý bao gồm 6.222 doanh nghiệp ngành công nghiệp chế biến, chế tạo và 5.982 doanh nghiệp ngành xây dựng được chọn mẫu điều tra, đại diện cho toàn ngành chế biến, chế tạo và xây dựng của 34 tỉnh, thành phố trực thuộc Trung ương. Tổng số doanh nghiệp trả lời trong kỳ điều tra quý II/2026 là 6.110 doanh nghiệp ngành công nghiệp chế biến, chế tạo (chiếm 98,2% số doanh nghiệp được chọn mẫu) và 5.763 doanh nghiệp ngành xây dựng (chiếm 96,3% số doanh nghiệp được chọn mẫu). Báo cáo kết quả điều tra xu hướng SXKD gồm hai phần:\nPhần I: Xu hướng SXKD ngành công nghiệp chế biến, chế tạo , phản ánh nhận định của doanh nghiệp về: (1) Tổng quan chung hoạt động SXKD; (2) Biến động của các yếu tố đầu vào (số lượng đơn đặt hàng, lao động, chi phí sản xuất, công suất sử dụng máy móc, thiết bị); (3) Dự kiến kết quả đầu ra (khối lượng sản xuất, giá bán bình quân của một sản phẩm); (4) Biến động tồn kho (tồn kho thành phẩm, tồn kho nguyên vật liệu); (5) Các yếu tố ảnh hưởng đến hoạt động SXKD của doanh nghiệp và (6) Kiến nghị của doanh nghiệp.\nPhần II: Xu hướng SXKD ngành xây dựng , phản ánh nhận định của doanh nghiệp về: (1) Tổng quan chung hoạt động SXKD; (2) Biến động của các yếu tố đầu vào (lao động, chi phí sản xuất, hợp đồng xây dựng mới, năng lực hoạt động của doanh nghiệp); (3) Vay vốn phục vụ sản xuất kinh doanh; (4) Các yếu tố ảnh hưởng đến hoạt động SXKD của doanh nghiệp và (5) Kiến nghị của doanh nghiệp.\nPHẦN I. XU HƯỚNG SẢN XUẤT KINH DOANH NGÀNH CÔNG NGHIỆP CHẾ BIẾN , CHẾ TẠO\nKết quả điều tra cho thấy hoạt động sản xuất kinh doanh của doanh nghiệp ngành công nghiệp chế biến, chế tạo tiếp tục cải thiện trong quý II/2026 và xu hướng lạc quan được duy trì sang quý III/2026. Cụ thể, có 7 9 ,7% doanh nghiệp đánh giá hoạt động SXKD quý II/202 6 so với quý I/2026 tốt hơn và giữ ổn định (36,3% tốt hơn và 43,4% giữ ổn định), 20,3% doanh nghiệp đánh gi
+... [truncated, total 30826 chars]
+================================================================================
+
+================================================================================
+Article ID: GSO_3307ac6b95b92eea | Attempt: 5
+Error: Cannot extract valid JSON from response: line 1 column 1 (char 0)
+Raw response (27445 chars):
+{
+  "id": "GSO_3307ac6b95b92eea",
+  "date_iso": "2026-07-03T00:00:00",
+  "full_text": "Điều tra xu hướng sản xuất kinh doanh (SXKD) hằng quý bao gồm 6.222 doanh nghiệp ngành công nghiệp chế biến, chế tạo và 5.982 doanh nghiệp ngành xây dựng được chọn mẫu điều tra, đại diện cho toàn ngành chế biến, chế tạo và xây dựng của 34 tỉnh, thành phố trực thuộc Trung ương. Tổng số doanh nghiệp trả lời trong kỳ điều tra quý II/2026 là 6.110 doanh nghiệp ngành công nghiệp chế biến, chế tạo (chiếm 98,2% số doanh nghiệp được chọn mẫu) và 5.763 doanh nghiệp ngành xây dựng (chiếm 96,3% số doanh nghiệp được chọn mẫu). Báo cáo kết quả điều tra xu hướng SXKD gồm hai phần:\nPhần I: Xu hướng SXKD ngành công nghiệp chế biến, chế tạo , phản ánh nhận định của doanh nghiệp về: (1) Tổng quan chung hoạt động SXKD; (2) Biến động của các yếu tố đầu vào (số lượng đơn đặt hàng, lao động, chi phí sản xuất, công suất sử dụng máy móc, thiết bị); (3) Dự kiến kết quả đầu ra (khối lượng sản xuất, giá bán bình quân của một sản phẩm); (4) Biến động tồn kho (tồn kho thành phẩm, tồn kho nguyên vật liệu); (5) Các yếu tố ảnh hưởng đến hoạt động SXKD của doanh nghiệp và (6) Kiến nghị của doanh nghiệp.\nPhần II: Xu hướng SXKD ngành xây dựng , phản ánh nhận định của doanh nghiệp về: (1) Tổng quan chung hoạt động SXKD; (2) Biến động của các yếu tố đầu vào (lao động, chi phí sản xuất, hợp đồng xây dựng mới, năng lực hoạt động của doanh nghiệp); (3) Vay vốn phục vụ sản xuất kinh doanh; (4) Các yếu tố ảnh hưởng đến hoạt động SXKD của doanh nghiệp và (5) Kiến nghị của doanh nghiệp.\nPHẦN I. XU HƯỚNG SẢN XUẤT KINH DOANH NGÀNH CÔNG NGHIỆP CHẾ BIẾN , CHẾ TẠO\nKết quả điều tra cho thấy hoạt động sản xuất kinh doanh của doanh nghiệp ngành công nghiệp chế biến, chế tạo tiếp tục cải thiện trong quý II/2026 và xu hướng lạc quan được duy trì sang quý III/2026. Cụ thể, có 7 9 ,7% doanh nghiệp đánh giá hoạt động SXKD quý II/202 6 so với quý I/2026 tốt hơn và giữ ổn định (36,3% tốt hơn và 43,4% giữ ổn định), 20,3% doanh nghiệp đ
+... [truncated, total 27445 chars]
+================================================================================
