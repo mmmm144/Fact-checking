@@ -32,20 +32,21 @@ API_URL = os.environ.get(
 )
 # XAH_API_KEY trong environment/.env sẽ được ưu tiên. Giá trị mặc định bên
 # dưới giúp chạy ngay mà không cần nhập key mỗi lần.
-DEFAULT_XAH_API_KEY = "sk-ae8fffdec0489ed860d69ec0b45a705f21887355ec7d8fc1763cf9a72a80d4a0"
+DEFAULT_XAH_API_KEY = "....................."
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 INPUT_FILE = PROJECT_ROOT / "data" / "vie" / "raw" / "viet-fact-checking" / "corpus_v1.json"
-OUTPUT_FILE = SCRIPT_DIR / "claims_corpus_v1_deepseek_v4_flash_6750.json"
-DEBUG_LOG_FILE = SCRIPT_DIR / "debug_invalid_json_deepseek_v4_flash_6750.log"
-FAILED_IDS_FILE = SCRIPT_DIR / "failed_ids_deepseek_v4_flash_6750.json"
+OUTPUT_FILE = SCRIPT_DIR / "claims_corpus_v1_deepseek_v4_flash_10000.json"
+DEBUG_LOG_FILE = SCRIPT_DIR / "debug_invalid_json_deepseek_v4_flash_10000.log"
+FAILED_IDS_FILE = SCRIPT_DIR / "failed_ids_deepseek_v4_flash_10000.json"
 MAX_RETRIES = 5
 RETRY_DELAY_BASE = 3  # seconds, exponential backoff
 DEFAULT_REQUEST_DELAY = 1.0
 MAX_AUTO_RATE_LIMIT_WAIT = 120.0
 MIN_TEXT_LENGTH = 50  # If original_text shorter than this, use justification
-DEFAULT_START_INDEX = 6750  # 1-based corpus position
+MIN_CLAIM_WORDS = 28  # Keep claims detailed enough to stand alone
+DEFAULT_START_INDEX = 10000  # 1-based corpus position
 
 # ─── System Prompt ───────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """Bạn là một chuyên gia dữ liệu và kiểm chứng thông tin (Fact-checker). Nhiệm vụ của bạn là đọc nội dung bài viết tôi cung cấp và tự động sinh ra các nhận định (claims) thuộc 3 loại: SUPPORTED (Đúng), REFUTED (Sai) và NOT_ENOUGH_INFO (Không đủ thông tin).
@@ -62,6 +63,13 @@ YÊU CẦU LÕI:
 2. REFUTED: Sinh ra 2 claim cung cấp thông tin sai lệch, trái ngược hoàn toàn với chi tiết trong bài viết.
 3. NOT_ENOUGH_INFO: Sinh ra 2 claim có vẻ liên quan đến chủ đề bài viết nhưng KHÔNG THỂ tìm thấy bằng chứng xác nhận hay bác bỏ trong nội dung bài.
 4. Mọi bằng chứng (evidence -> quote) bắt buộc phải trích dẫn Y NGUYÊN TỪNG CHỮ từ bài viết gốc.
+
+YÊU CẦU VỀ CHẤT LƯỢNG CLAIM:
+- Mỗi claim phải là đúng một câu trần thuật hoàn chỉnh, có ít nhất 28 từ và ưu tiên trong khoảng 35-40 từ.
+- Claim phải tự đủ nghĩa khi đứng độc lập: nêu rõ chủ thể/thực thể và sự việc; thêm thời gian, địa điểm, đại lượng hoặc phạm vi nếu bài viết có các chi tiết đó.
+- KHÔNG viết claim dạng tiêu đề, cụm từ rút gọn hoặc câu dùng đại từ mơ hồ như “điều này”, “nơi đây”, “họ” mà không nêu rõ đối tượng.
+- Vẫn giữ claim đơn nhất (atomic): chỉ chứa một thông tin chính có thể kiểm chứng, không ghép nhiều nhận định không liên quan để kéo dài câu.
+- Không sao chép nguyên một câu quá dài chỉ để đạt số từ; hãy diễn đạt tự nhiên, chính xác và cụ thể.
 
 ĐỊNH DẠNG ĐẦU RA (OUTPUT FORMAT):
 Bạn CHỈ ĐƯỢC PHÉP trả về duy nhất một chuỗi JSON hợp lệ, tuyệt đối không giải thích thêm, không dùng markdown ```json...``` bao quanh. Cấu trúc JSON đầu ra bắt buộc phải tuân theo format mẫu sau:
@@ -296,6 +304,10 @@ class ModelUnavailableError(RuntimeError):
 class QuotaReachedError(RuntimeError):
     """Raised when rate/quota limits cannot recover with a short wait."""
 
+
+class OutputValidationError(RuntimeError):
+    """Raised when the model repeatedly returns an invalid claim structure."""
+
 # ─── Helper Functions ────────────────────────────────────────────────────────
 
 def configure_console_encoding() -> None:
@@ -505,6 +517,19 @@ def validate_output_schema(data: dict, article_id: str) -> list[str]:
             errors.append(f"claims.{label} has {len(claim_list)} items, expected 2")
             continue
         for i, claim_item in enumerate(claim_list):
+            if not isinstance(claim_item, dict):
+                errors.append(f"claims.{label}[{i}] is not an object")
+                continue
+            claim_value = claim_item.get("claim")
+            if not isinstance(claim_value, str) or not claim_value.strip():
+                errors.append(f"claims.{label}[{i}].claim is empty or not a string")
+            else:
+                word_count = len(claim_value.split())
+                if word_count < MIN_CLAIM_WORDS:
+                    errors.append(
+                        f"claims.{label}[{i}].claim has {word_count} words, "
+                        f"minimum is {MIN_CLAIM_WORDS}"
+                    )
             if "claim" not in claim_item:
                 errors.append(f"claims.{label}[{i}] missing 'claim'")
             if "evidence" not in claim_item:

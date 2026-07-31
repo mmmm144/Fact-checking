@@ -37,15 +37,16 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 INPUT_FILE = PROJECT_ROOT / "data" / "vie" / "raw" / "viet-fact-checking" / "corpus_v1.json"
-OUTPUT_FILE = SCRIPT_DIR / "claims_corpus_v1_deepseek_v4_flash.json"
-DEBUG_LOG_FILE = SCRIPT_DIR / "debug_invalid_json_deepseek_v4_flash.log"
-FAILED_IDS_FILE = SCRIPT_DIR / "failed_ids_deepseek_v4_flash.json"
+OUTPUT_FILE = SCRIPT_DIR / "claims_corpus_v1_deepseek_v4_flash_6750.json"
+DEBUG_LOG_FILE = SCRIPT_DIR / "debug_invalid_json_deepseek_v4_flash_6750.log"
+FAILED_IDS_FILE = SCRIPT_DIR / "failed_ids_deepseek_v4_flash_6750.json"
 MAX_RETRIES = 5
 RETRY_DELAY_BASE = 3  # seconds, exponential backoff
 DEFAULT_REQUEST_DELAY = 1.0
 MAX_AUTO_RATE_LIMIT_WAIT = 120.0
 MIN_TEXT_LENGTH = 50  # If original_text shorter than this, use justification
 MIN_CLAIM_WORDS = 28  # Keep claims detailed enough to stand alone
+DEFAULT_START_INDEX = 6750  # 1-based corpus position
 
 # ─── System Prompt ───────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """Bạn là một chuyên gia dữ liệu và kiểm chứng thông tin (Fact-checker). Nhiệm vụ của bạn là đọc nội dung bài viết tôi cung cấp và tự động sinh ra các nhận định (claims) thuộc 3 loại: SUPPORTED (Đúng), REFUTED (Sai) và NOT_ENOUGH_INFO (Không đủ thông tin).
@@ -647,7 +648,13 @@ def main():
         "--limit",
         type=int,
         default=None,
-        help="Process only the first N corpus records (recommended for a test run).",
+        help="Process only N corpus records beginning at --start-index.",
+    )
+    parser.add_argument(
+        "--start-index",
+        type=int,
+        default=DEFAULT_START_INDEX,
+        help=f"1-based corpus position to start from (default: {DEFAULT_START_INDEX}).",
     )
     parser.add_argument(
         "--request-delay",
@@ -659,6 +666,8 @@ def main():
 
     if args.limit is not None and args.limit <= 0:
         parser.error("--limit must be greater than 0")
+    if args.start_index <= 0:
+        parser.error("--start-index must be greater than 0")
     if args.request_delay < 0:
         parser.error("--request-delay cannot be negative")
 
@@ -674,13 +683,25 @@ def main():
 
     print(f"Loading dataset from {args.input_file}...")
     raw_records = load_dataset(args.input_file)
+    dataset_total = len(raw_records)
+    if args.start_index > dataset_total:
+        parser.error(
+            f"--start-index ({args.start_index}) exceeds dataset size ({dataset_total})"
+        )
+
+    start_offset = args.start_index - 1
     if args.limit is not None:
-        raw_records = raw_records[:args.limit]
+        raw_records = raw_records[start_offset:start_offset + args.limit]
+    else:
+        raw_records = raw_records[start_offset:]
     articles = [
         normalize_corpus_article(record, index)
-        for index, record in enumerate(raw_records, start=1)
+        for index, record in enumerate(raw_records, start=args.start_index)
     ]
-    print(f"Total articles: {len(articles)}")
+    print(
+        f"Dataset articles: {dataset_total}. "
+        f"Starting at sample {args.start_index}; queued: {len(articles)}"
+    )
 
     # Load existing results for resume
     existing = load_existing_results(args.output_file)
@@ -692,11 +713,11 @@ def main():
 
     # Process each article
     failed_ids = []
-    total = len(articles)
+    total = dataset_total
     skipped = 0
     quota_exhausted = False
 
-    for idx, article in enumerate(articles, start=1):
+    for idx, article in enumerate(articles, start=args.start_index):
         article_id = article.get("id", f"unknown_{idx}")
 
         # Skip if already processed

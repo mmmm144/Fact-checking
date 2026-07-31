@@ -37,15 +37,16 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 INPUT_FILE = PROJECT_ROOT / "data" / "vie" / "raw" / "viet-fact-checking" / "corpus_v1.json"
-OUTPUT_FILE = SCRIPT_DIR / "claims_corpus_v1_deepseek_v4_flash.json"
-DEBUG_LOG_FILE = SCRIPT_DIR / "debug_invalid_json_deepseek_v4_flash.log"
-FAILED_IDS_FILE = SCRIPT_DIR / "failed_ids_deepseek_v4_flash.json"
+OUTPUT_FILE = SCRIPT_DIR / "claims_corpus_v1_deepseek_v4_flash_3300.json"
+DEBUG_LOG_FILE = SCRIPT_DIR / "debug_invalid_json_deepseek_v4_flash_3300.log"
+FAILED_IDS_FILE = SCRIPT_DIR / "failed_ids_deepseek_v4_flash_3300.json"
 MAX_RETRIES = 5
 RETRY_DELAY_BASE = 3  # seconds, exponential backoff
 DEFAULT_REQUEST_DELAY = 1.0
 MAX_AUTO_RATE_LIMIT_WAIT = 120.0
 MIN_TEXT_LENGTH = 50  # If original_text shorter than this, use justification
 MIN_CLAIM_WORDS = 28  # Keep claims detailed enough to stand alone
+DEFAULT_START_INDEX = 3300  # 1-based corpus position
 
 # ─── System Prompt ───────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """Bạn là một chuyên gia dữ liệu và kiểm chứng thông tin (Fact-checker). Nhiệm vụ của bạn là đọc nội dung bài viết tôi cung cấp và tự động sinh ra các nhận định (claims) thuộc 3 loại: SUPPORTED (Đúng), REFUTED (Sai) và NOT_ENOUGH_INFO (Không đủ thông tin).
@@ -515,19 +516,19 @@ def validate_output_schema(data: dict, article_id: str) -> list[str]:
         if len(claim_list) < 2:
             errors.append(f"claims.{label} has {len(claim_list)} items, expected 2")
             continue
-        for i, claim_item in enumerate(claim_list):
+        for i, claim_item in enumerate(claim_list):  # Validate every generated claim.
             if not isinstance(claim_item, dict):
-                errors.append(f"claims.{label}[{i}] is not an object")
+                errors.append(f'claims.{label}[{i}] is not an object')
                 continue
-            claim_value = claim_item.get("claim")
+            claim_value = claim_item.get('claim')
             if not isinstance(claim_value, str) or not claim_value.strip():
-                errors.append(f"claims.{label}[{i}].claim is empty or not a string")
+                errors.append(f'claims.{label}[{i}].claim is empty or not a string')
             else:
                 word_count = len(claim_value.split())
                 if word_count < MIN_CLAIM_WORDS:
                     errors.append(
-                        f"claims.{label}[{i}].claim has {word_count} words, "
-                        f"minimum is {MIN_CLAIM_WORDS}"
+                        f'claims.{label}[{i}].claim has {word_count} words, '
+                        f'minimum is {MIN_CLAIM_WORDS}'
                     )
             if "claim" not in claim_item:
                 errors.append(f"claims.{label}[{i}] missing 'claim'")
@@ -543,18 +544,36 @@ def validate_output_schema(data: dict, article_id: str) -> list[str]:
     return errors
 
 
+def has_short_claims(data: dict) -> bool:
+    '''Return True when a saved result contains a claim below the quality floor.'''
+    claims = data.get('claims')
+    if not isinstance(claims, dict):
+        return False
+    for claim_list in claims.values():
+        if not isinstance(claim_list, list):
+            continue
+        for claim_item in claim_list:
+            if not isinstance(claim_item, dict):
+                continue
+            claim = claim_item.get('claim')
+            if isinstance(claim, str) and len(claim.split()) < MIN_CLAIM_WORDS:
+                return True
+    return False
+
+
 def call_model_with_validation(article: dict) -> dict:
     """
     Call the model, validate JSON output, and retry if invalid.
     Returns validated result dict.
     """
-    user_prompt = build_user_prompt(article)
+    base_user_prompt = build_user_prompt(article)
     article_id = article.get("id", "unknown")
     result = None
+    retry_feedback = ''
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            content = call_deepseek_api(user_prompt)
+            content = call_deepseek_api(base_user_prompt + retry_feedback)
 
             # Parse JSON
             result = extract_json_from_response(content)
@@ -566,12 +585,20 @@ def call_model_with_validation(article: dict) -> dict:
                 print(f"  [Attempt {attempt}/{MAX_RETRIES}] Schema validation failed: {error_msg}")
                 log_debug(article_id, attempt, content, f"Schema: {error_msg}")
                 if attempt < MAX_RETRIES:
+                    retry_feedback = (
+                        '\n\nKẾT QUẢ LẦN TRƯỚC KHÔNG ĐẠT YÊU CẦU: '
+                        + error_msg
+                        + '. Hãy sinh lại TOÀN BỘ JSON; mỗi claim phải là một câu '
+                        f'hoàn chỉnh có ít nhất {MIN_CLAIM_WORDS} từ và tự đủ nghĩa.'
+                    )
                     print(f"  Retrying in {RETRY_DELAY_BASE * attempt}s...")
                     time.sleep(RETRY_DELAY_BASE * attempt)
                     continue
                 else:
-                    print(f"  [WARNING] Accepting partial result for {article_id}")
-                    break
+                    raise OutputValidationError(
+                        f'Schema validation failed for article {article_id} after '
+                        f'{MAX_RETRIES} attempts: {error_msg}'
+                    )
 
             # Ensure consistent id/date/full_text from source
             result["id"] = article_id
@@ -591,6 +618,9 @@ def call_model_with_validation(article: dict) -> dict:
                 raise RuntimeError(
                     f"Failed to get valid JSON for article {article_id} after {MAX_RETRIES} attempts"
                 )
+
+        except OutputValidationError:
+            raise
 
         except Exception as e:
             print(f"  [Attempt {attempt}/{MAX_RETRIES}] API error: {type(e).__name__}: {e}")
@@ -647,7 +677,13 @@ def main():
         "--limit",
         type=int,
         default=None,
-        help="Process only the first N corpus records (recommended for a test run).",
+        help="Process only N corpus records beginning at --start-index.",
+    )
+    parser.add_argument(
+        "--start-index",
+        type=int,
+        default=DEFAULT_START_INDEX,
+        help=f"1-based corpus position to begin processing (default: {DEFAULT_START_INDEX}).",
     )
     parser.add_argument(
         "--request-delay",
@@ -655,10 +691,20 @@ def main():
         default=DEFAULT_REQUEST_DELAY,
         help=f"Seconds to wait between successful requests (default: {DEFAULT_REQUEST_DELAY}).",
     )
+    parser.add_argument(
+        "--regenerate-short-claims",
+        action="store_true",
+        help=(
+            f"Regenerate saved articles containing a claim shorter than "
+            f"{MIN_CLAIM_WORDS} words instead of skipping them."
+        ),
+    )
     args = parser.parse_args()
 
     if args.limit is not None and args.limit <= 0:
         parser.error("--limit must be greater than 0")
+    if args.start_index <= 0:
+        parser.error("--start-index must be greater than 0")
     if args.request_delay < 0:
         parser.error("--request-delay cannot be negative")
 
@@ -674,29 +720,53 @@ def main():
 
     print(f"Loading dataset from {args.input_file}...")
     raw_records = load_dataset(args.input_file)
+    dataset_total = len(raw_records)
+    if args.start_index > dataset_total:
+        parser.error(
+            f"--start-index ({args.start_index}) exceeds dataset size ({dataset_total})"
+        )
+
+    start_offset = args.start_index - 1
     if args.limit is not None:
-        raw_records = raw_records[:args.limit]
+        raw_records = raw_records[start_offset:start_offset + args.limit]
+    else:
+        raw_records = raw_records[start_offset:]
     articles = [
         normalize_corpus_article(record, index)
-        for index, record in enumerate(raw_records, start=1)
+        for index, record in enumerate(raw_records, start=args.start_index)
     ]
-    print(f"Total articles: {len(articles)}")
+    print(
+        f"Dataset articles: {dataset_total}. "
+        f"Starting at sample {args.start_index}; queued: {len(articles)}"
+    )
 
     # Load existing results for resume
     existing = load_existing_results(args.output_file)
     if existing:
         print(f"Found {len(existing)} already-processed articles. Resuming...")
+    regenerate_ids = set()
+    if args.regenerate_short_claims:
+        regenerate_ids = {
+            article_id
+            for article_id, result in existing.items()
+            if has_short_claims(result)
+        }
+        print(
+            f"Will regenerate {len(regenerate_ids)} saved articles containing "
+            f"claims shorter than {MIN_CLAIM_WORDS} words."
+        )
 
     results = list(existing.values())
-    processed_ids = set(existing.keys())
+    processed_ids = set(existing.keys()) - regenerate_ids
 
     # Process each article
     failed_ids = []
-    total = len(articles)
+    total = dataset_total
     skipped = 0
+    processed_this_run = 0
     quota_exhausted = False
 
-    for idx, article in enumerate(articles, start=1):
+    for idx, article in enumerate(articles, start=args.start_index):
         article_id = article.get("id", f"unknown_{idx}")
 
         # Skip if already processed
@@ -708,8 +778,12 @@ def main():
 
         try:
             result = call_model_with_validation(article)
+            if article_id in regenerate_ids:
+                results = [item for item in results if str(item.get("id")) != article_id]
+                regenerate_ids.discard(article_id)
             results.append(result)
             processed_ids.add(article_id)
+            processed_this_run += 1
             print(f"  Done ({len(results)} total saved)")
         except QuotaReachedError as e:
             quota_exhausted = True
@@ -747,7 +821,7 @@ def main():
     print("PAUSED (API RATE/QUOTA LIMIT)" if quota_exhausted else "COMPLETE!")
     print(f"  Total articles: {total}")
     print(f"  Skipped (already done): {skipped}")
-    print(f"  Processed this run: {len(results) - len(existing)}")
+    print(f"  Processed this run: {processed_this_run}")
     print(f"  Total saved: {len(results)}")
     print(f"  Output: {args.output_file}")
     if failed_ids:
