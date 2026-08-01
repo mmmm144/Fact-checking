@@ -107,3 +107,11 @@ python3 src/evaluate.py
 * **TRUE:** `367 mục (59.39%)` (Cảnh báo chính thống + Tin chính thống)
 * **FALSE:** `251 mục (40.61%)` (Tin đồn cào từ VAFC + Tin giả nhân tạo sinh từ NCSC)
 * **Tỷ lệ khuyết thiếu dữ liệu:** `0%`
+
+
+
+<!-- $env:GEMINI_API_KEY = " "; try {
+      python .\generation_claim\fact_checking_Gemini_free.py
+  } finally {
+      Remove-Item Env:\GEMINI_API_KEY -ErrorAction SilentlyContinue
+  } -->

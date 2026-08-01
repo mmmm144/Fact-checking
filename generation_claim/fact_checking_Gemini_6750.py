@@ -1,7 +1,7 @@
 """
 Fact-checking claim generation script for Vietnamese Evidence Corpus v1.0.
-Reads corpus_v1.json, calls DeepSeek V4 Flash through the xah.io API,
-validates JSON and saves results separately from Gemini results.
+Reads corpus_v1.json, calls Gemini 3.6 Flash through OpenRouter,
+validates JSON and saves resumable results.
 
 Features:
 - Auto-retry on invalid JSON response from model
@@ -25,28 +25,32 @@ from pathlib import Path
 
 
 # ─── Configuration ───────────────────────────────────────────────────────────
-MODEL = os.environ.get("XAH_MODEL", "deepseek-v4-flash")
-API_URL = os.environ.get(
-    "XAH_API_URL",
-    "https://api.xah.io/v1/chat/completions",
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash-lite")
+OPENROUTER_MODEL = os.environ.get(
+    "OPENROUTER_MODEL", "google/gemini-3.5-flash-lite"
 )
-# XAH_API_KEY trong environment/.env sẽ được ưu tiên. Giá trị mặc định bên
-# dưới giúp chạy ngay mà không cần nhập key mỗi lần.
-DEFAULT_XAH_API_KEY = "....................."
+GEMINI_API_URL = os.environ.get(
+    "GEMINI_API_URL",
+    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+)
+OPENROUTER_API_URL = os.environ.get(
+    "OPENROUTER_API_URL",
+    "https://openrouter.ai/api/v1/chat/completions",
+)
+# GEMINI_API_KEY and OPENROUTER_API_KEY are read from the environment/.env.
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 INPUT_FILE = PROJECT_ROOT / "data" / "vie" / "raw" / "viet-fact-checking" / "corpus_v1.json"
-OUTPUT_FILE = SCRIPT_DIR / "claims_corpus_v1_deepseek_v4_flash_3300.json"
-DEBUG_LOG_FILE = SCRIPT_DIR / "debug_invalid_json_deepseek_v4_flash_3300.log"
-FAILED_IDS_FILE = SCRIPT_DIR / "failed_ids_deepseek_v4_flash_3300.json"
+OUTPUT_FILE = SCRIPT_DIR / "claims_corpus_v1_gemini_3_5_flash_6750.json"
+DEBUG_LOG_FILE = SCRIPT_DIR / "debug_invalid_json_gemini_3_5_flash_6750.log"
+FAILED_IDS_FILE = SCRIPT_DIR / "failed_ids_gemini_3_5_flash_6750.json"
 MAX_RETRIES = 5
 RETRY_DELAY_BASE = 3  # seconds, exponential backoff
 DEFAULT_REQUEST_DELAY = 1.0
 MAX_AUTO_RATE_LIMIT_WAIT = 120.0
 MIN_TEXT_LENGTH = 50  # If original_text shorter than this, use justification
-MIN_CLAIM_WORDS = 28  # Keep claims detailed enough to stand alone
-DEFAULT_START_INDEX = 3300  # 1-based corpus position
+DEFAULT_START_INDEX = 6750  # One-based corpus record number
 
 # ─── System Prompt ───────────────────────────────────────────────────────────
 SYSTEM_PROMPT = """Bạn là một chuyên gia dữ liệu và kiểm chứng thông tin (Fact-checker). Nhiệm vụ của bạn là đọc nội dung bài viết tôi cung cấp và tự động sinh ra các nhận định (claims) thuộc 3 loại: SUPPORTED (Đúng), REFUTED (Sai) và NOT_ENOUGH_INFO (Không đủ thông tin).
@@ -61,15 +65,24 @@ QUY TẮC TUYỆT ĐỐI:
 YÊU CẦU LÕI:
 1. SUPPORTED: Sinh ra 2 claim phản ánh chính xác thông tin có trong bài viết.
 2. REFUTED: Sinh ra 2 claim cung cấp thông tin sai lệch, trái ngược hoàn toàn với chi tiết trong bài viết.
-3. NOT_ENOUGH_INFO: Sinh ra 2 claim có vẻ liên quan đến chủ đề bài viết nhưng KHÔNG THỂ tìm thấy bằng chứng xác nhận hay bác bỏ trong nội dung bài.
+3. NOT_ENOUGH_INFO: Sinh ra 2 claim bám trực tiếp vào một chủ thể, thực thể hoặc sự kiện thực sự xuất hiện trong bài, nhưng chứa đúng một thuộc tính quan trọng mà toàn bộ bài viết không đủ bằng chứng để xác nhận hoặc bác bỏ.
 4. Mọi bằng chứng (evidence -> quote) bắt buộc phải trích dẫn Y NGUYÊN TỪNG CHỮ từ bài viết gốc.
 
 YÊU CẦU VỀ CHẤT LƯỢNG CLAIM:
-- Mỗi claim phải là đúng một câu trần thuật hoàn chỉnh, có ít nhất 28 từ và ưu tiên trong khoảng 35-40 từ.
+- Mỗi claim phải là đúng một câu trần thuật hoàn chỉnh và ưu tiên trong khoảng 40-50 từ; đây là mục tiêu mềm, không phải điều kiện bắt buộc.
 - Claim phải tự đủ nghĩa khi đứng độc lập: nêu rõ chủ thể/thực thể và sự việc; thêm thời gian, địa điểm, đại lượng hoặc phạm vi nếu bài viết có các chi tiết đó.
 - KHÔNG viết claim dạng tiêu đề, cụm từ rút gọn hoặc câu dùng đại từ mơ hồ như “điều này”, “nơi đây”, “họ” mà không nêu rõ đối tượng.
 - Vẫn giữ claim đơn nhất (atomic): chỉ chứa một thông tin chính có thể kiểm chứng, không ghép nhiều nhận định không liên quan để kéo dài câu.
+- KHÔNG bổ sung thời gian, nguyên nhân, mục đích, kết quả, địa điểm, đại lượng hoặc bất kỳ chi tiết nào không có trong nguồn chỉ để đạt độ dài mong muốn.
+- Tính atomic, khả năng kiểm chứng và độ trung thành với nguồn quan trọng hơn số từ.
 - Không sao chép nguyên một câu quá dài chỉ để đạt số từ; hãy diễn đạt tự nhiên, chính xác và cụ thể.
+
+RÀNG BUỘC RIÊNG CHO NOT_ENOUGH_INFO:
+- Claim phải giữ nguyên ít nhất một chủ thể, thực thể hoặc sự kiện được nêu rõ trong bài; không được chỉ liên quan chung về chủ đề.
+- Chỉ bổ sung đúng một thuộc tính quan trọng còn thiếu trong bài, chẳng hạn một con số, thời điểm, nguyên nhân hoặc kết quả chưa được nêu.
+- Thuộc tính bổ sung không được trái ngược với bất kỳ thông tin nào đã có trong bài.
+- Sau khi xét TOÀN BỘ bài viết, claim phải không thể được xác nhận và cũng không thể bị bác bỏ.
+- Không đưa vào claim thực thể hoặc sự kiện mới không xuất hiện trong bài, và không suy diễn sang vấn đề rộng hơn.
 
 ĐỊNH DẠNG ĐẦU RA (OUTPUT FORMAT):
 Bạn CHỈ ĐƯỢC PHÉP trả về duy nhất một chuỗi JSON hợp lệ, tuyệt đối không giải thích thêm, không dùng markdown ```json...``` bao quanh. Cấu trúc JSON đầu ra bắt buộc phải tuân theo format mẫu sau:
@@ -165,11 +178,11 @@ Bạn CHỈ ĐƯỢC PHÉP trả về duy nhất một chuỗi JSON hợp lệ, 
 }
 }"""
 
-# ─── DeepSeek/xah.io Client ─────────────────────────────────────────────────
+# ─── OpenRouter Client ──────────────────────────────────────────────────────
 
-def load_xah_api_key() -> str:
-    """Read XAH_API_KEY from environment/.env, or use the configured default."""
-    value = os.environ.get("XAH_API_KEY")
+def load_api_key(variable_name: str) -> str:
+    """Read an API key from the environment or project .env file."""
+    value = os.environ.get(variable_name)
     if value:
         return value.strip()
 
@@ -179,42 +192,70 @@ def load_xah_api_key() -> str:
             if not stripped_line or stripped_line.startswith("#") or "=" not in stripped_line:
                 continue
             key, value = stripped_line.split("=", 1)
-            if key.strip() == "XAH_API_KEY":
+            if key.strip() == variable_name:
                 api_key = value.strip().strip('"').strip("'")
                 if api_key:
                     return api_key
-    return DEFAULT_XAH_API_KEY
+    return ""
 
 
-class XahAPIError(RuntimeError):
-    """HTTP/API error returned by the xah.io endpoint."""
+def load_gemini_api_key() -> str:
+    return load_api_key("GEMINI_API_KEY")
 
-    def __init__(self, status_code: int, message: str, headers=None):
-        super().__init__(f"HTTP {status_code}: {message}")
+
+def load_openrouter_api_key() -> str:
+    return load_api_key("OPENROUTER_API_KEY")
+
+
+class ProviderAPIError(RuntimeError):
+    """HTTP/API error returned by Gemini or OpenRouter."""
+
+    def __init__(self, provider: str, status_code: int, message: str, headers=None):
+        super().__init__(f"{provider} HTTP {status_code}: {message}")
+        self.provider = provider
         self.status_code = status_code
         self.headers = headers
 
 
-def call_deepseek_api(user_prompt: str) -> str:
-    """Call xah.io's OpenAI-compatible chat-completions endpoint."""
+def call_provider_api(
+    user_prompt: str,
+    *,
+    provider: str,
+    api_url: str,
+    api_key: str,
+    model: str,
+) -> str:
+    """Call an OpenAI-compatible chat-completions endpoint."""
     payload = {
-        "model": MODEL,
+        "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        "temperature": 0.2,
         "max_tokens": 16384,
         "response_format": {"type": "json_object"},
     }
+    if provider == "Gemini":
+        payload["reasoning_effort"] = "minimal"
+    else:
+        payload["reasoning"] = {"effort": "minimal", "exclude": True}
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    if provider == "OpenRouter":
+        headers.update(
+            {
+                "HTTP-Referer": "https://localhost/fact-checking",
+                "X-Title": "Vietnamese Fact Checking Claim Generation",
+            }
+        )
     request = urllib.request.Request(
-        API_URL,
+        api_url,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {load_xah_api_key()}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
+        headers=headers,
         method="POST",
     )
 
@@ -228,13 +269,20 @@ def call_deepseek_api(user_prompt: str) -> str:
             error_value = error_data.get("error", error_data)
             if isinstance(error_value, dict):
                 message = str(error_value.get("message") or error_value)
+                details = error_value.get("details")
+                if details:
+                    message += " Details: " + json.dumps(details)
             else:
                 message = str(error_value)
         except json.JSONDecodeError:
             message = response_body or str(error)
-        raise XahAPIError(error.code, message, error.headers) from error
+        raise ProviderAPIError(
+            provider, error.code, message, error.headers
+        ) from error
     except urllib.error.URLError as error:
-        raise RuntimeError(f"Cannot connect to {API_URL}: {error.reason}") from error
+        raise RuntimeError(
+            f"Cannot connect to {provider} at {api_url}: {error.reason}"
+        ) from error
 
     try:
         response_data = json.loads(response_body)
@@ -254,10 +302,72 @@ def call_deepseek_api(user_prompt: str) -> str:
     return str(content or "")
 
 
+_gemini_quota_exhausted_for_run = False
+
+
+def call_gemini_api(user_prompt: str) -> str:
+    return call_provider_api(
+        user_prompt,
+        provider="Gemini",
+        api_url=GEMINI_API_URL,
+        api_key=load_gemini_api_key(),
+        model=GEMINI_MODEL,
+    )
+
+
+def call_openrouter_api(user_prompt: str) -> str:
+    return call_provider_api(
+        user_prompt,
+        provider="OpenRouter",
+        api_url=OPENROUTER_API_URL,
+        api_key=load_openrouter_api_key(),
+        model=OPENROUTER_MODEL,
+    )
+
+
+def call_api_with_fallback(user_prompt: str) -> str:
+    """Use Gemini first, then latch to OpenRouter after a Gemini quota error."""
+    global _gemini_quota_exhausted_for_run
+
+    gemini_key = load_gemini_api_key()
+    openrouter_key = load_openrouter_api_key()
+    if gemini_key and not _gemini_quota_exhausted_for_run:
+        try:
+            return call_gemini_api(user_prompt)
+        except ProviderAPIError as error:
+            if not is_quota_error(error) or not openrouter_key:
+                raise
+            retry_delay = get_retry_delay(error)
+            if retry_delay is not None and retry_delay <= MAX_AUTO_RATE_LIMIT_WAIT:
+                wait_seconds = retry_delay + 1
+                print(
+                    f"  Gemini short rate limit; waiting {wait_seconds:.1f}s "
+                    "before using paid fallback."
+                )
+                time.sleep(wait_seconds)
+                try:
+                    return call_gemini_api(user_prompt)
+                except ProviderAPIError as retry_error:
+                    if not is_quota_error(retry_error):
+                        raise
+            _gemini_quota_exhausted_for_run = True
+            print(
+                "  Gemini free quota is unavailable; "
+                "switching to OpenRouter for the rest of this run."
+            )
+
+    if openrouter_key:
+        return call_openrouter_api(user_prompt)
+
+    raise RuntimeError(
+        "No usable API provider. Set GEMINI_API_KEY and/or OPENROUTER_API_KEY."
+    )
+
+
 def is_quota_error(error: Exception) -> bool:
     """Return True when the API reports a rate or quota limit."""
     message = f"{type(error).__name__}: {error}".lower()
-    if isinstance(error, XahAPIError) and error.status_code == 429:
+    if isinstance(error, ProviderAPIError) and error.status_code == 429:
         return True
     return any(
         marker in message
@@ -269,13 +379,13 @@ def is_model_unavailable_error(error: Exception) -> bool:
     """Return True for a missing, retired, or inaccessible model."""
     message = f"{type(error).__name__}: {error}".lower()
     return (
-        isinstance(error, XahAPIError) and error.status_code == 404
+        isinstance(error, ProviderAPIError) and error.status_code == 404
     ) or ("model" in message and "not found" in message)
 
 
 def get_retry_delay(error: Exception) -> float | None:
     """Extract a suggested retry delay from headers or the API error."""
-    if isinstance(error, XahAPIError) and error.headers:
+    if isinstance(error, ProviderAPIError) and error.headers:
         retry_after = error.headers.get("Retry-After")
         if retry_after:
             try:
@@ -298,7 +408,7 @@ def get_retry_delay(error: Exception) -> float | None:
 
 
 class ModelUnavailableError(RuntimeError):
-    """Raised when the configured DeepSeek model cannot be used."""
+    """Raised when the configured OpenRouter model cannot be used."""
 
 
 class QuotaReachedError(RuntimeError):
@@ -516,20 +626,14 @@ def validate_output_schema(data: dict, article_id: str) -> list[str]:
         if len(claim_list) < 2:
             errors.append(f"claims.{label} has {len(claim_list)} items, expected 2")
             continue
-        for i, claim_item in enumerate(claim_list):  # Validate every generated claim.
+        for i, claim_item in enumerate(claim_list):
             if not isinstance(claim_item, dict):
-                errors.append(f'claims.{label}[{i}] is not an object')
+                errors.append(f"claims.{label}[{i}] is not an object")
                 continue
-            claim_value = claim_item.get('claim')
+            claim_value = claim_item.get("claim")
             if not isinstance(claim_value, str) or not claim_value.strip():
-                errors.append(f'claims.{label}[{i}].claim is empty or not a string')
-            else:
-                word_count = len(claim_value.split())
-                if word_count < MIN_CLAIM_WORDS:
-                    errors.append(
-                        f'claims.{label}[{i}].claim has {word_count} words, '
-                        f'minimum is {MIN_CLAIM_WORDS}'
-                    )
+                errors.append(f"claims.{label}[{i}].claim is empty or not a string")
+
             if "claim" not in claim_item:
                 errors.append(f"claims.{label}[{i}] missing 'claim'")
             if "evidence" not in claim_item:
@@ -544,36 +648,18 @@ def validate_output_schema(data: dict, article_id: str) -> list[str]:
     return errors
 
 
-def has_short_claims(data: dict) -> bool:
-    '''Return True when a saved result contains a claim below the quality floor.'''
-    claims = data.get('claims')
-    if not isinstance(claims, dict):
-        return False
-    for claim_list in claims.values():
-        if not isinstance(claim_list, list):
-            continue
-        for claim_item in claim_list:
-            if not isinstance(claim_item, dict):
-                continue
-            claim = claim_item.get('claim')
-            if isinstance(claim, str) and len(claim.split()) < MIN_CLAIM_WORDS:
-                return True
-    return False
-
-
 def call_model_with_validation(article: dict) -> dict:
     """
     Call the model, validate JSON output, and retry if invalid.
     Returns validated result dict.
     """
-    base_user_prompt = build_user_prompt(article)
+    user_prompt = build_user_prompt(article)
     article_id = article.get("id", "unknown")
     result = None
-    retry_feedback = ''
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            content = call_deepseek_api(base_user_prompt + retry_feedback)
+            content = call_api_with_fallback(user_prompt)
 
             # Parse JSON
             result = extract_json_from_response(content)
@@ -585,20 +671,12 @@ def call_model_with_validation(article: dict) -> dict:
                 print(f"  [Attempt {attempt}/{MAX_RETRIES}] Schema validation failed: {error_msg}")
                 log_debug(article_id, attempt, content, f"Schema: {error_msg}")
                 if attempt < MAX_RETRIES:
-                    retry_feedback = (
-                        '\n\nKẾT QUẢ LẦN TRƯỚC KHÔNG ĐẠT YÊU CẦU: '
-                        + error_msg
-                        + '. Hãy sinh lại TOÀN BỘ JSON; mỗi claim phải là một câu '
-                        f'hoàn chỉnh có ít nhất {MIN_CLAIM_WORDS} từ và tự đủ nghĩa.'
-                    )
                     print(f"  Retrying in {RETRY_DELAY_BASE * attempt}s...")
                     time.sleep(RETRY_DELAY_BASE * attempt)
                     continue
                 else:
-                    raise OutputValidationError(
-                        f'Schema validation failed for article {article_id} after '
-                        f'{MAX_RETRIES} attempts: {error_msg}'
-                    )
+                    print(f"  [WARNING] Accepting partial result for {article_id}")
+                    break
 
             # Ensure consistent id/date/full_text from source
             result["id"] = article_id
@@ -619,16 +697,13 @@ def call_model_with_validation(article: dict) -> dict:
                     f"Failed to get valid JSON for article {article_id} after {MAX_RETRIES} attempts"
                 )
 
-        except OutputValidationError:
-            raise
-
         except Exception as e:
             print(f"  [Attempt {attempt}/{MAX_RETRIES}] API error: {type(e).__name__}: {e}")
             log_debug(article_id, attempt, "", f"API error: {type(e).__name__}: {e}")
 
             if is_model_unavailable_error(e):
                 raise ModelUnavailableError(
-                    f"Model {MODEL} is unavailable through {API_URL}."
+                    f"Configured model is unavailable: {e}"
                 ) from e
 
             if is_quota_error(e):
@@ -643,7 +718,7 @@ def call_model_with_validation(article: dict) -> dict:
                     time.sleep(wait_seconds)
                     continue
                 raise QuotaReachedError(
-                    "DeepSeek API rate/quota limit reached; progress will be saved."
+                    "API rate/quota or credit limit reached; progress will be saved."
                 ) from e
 
             if attempt < MAX_RETRIES:
@@ -674,16 +749,19 @@ def main():
     parser.add_argument("--input-file", type=Path, default=INPUT_FILE)
     parser.add_argument("--output-file", type=Path, default=OUTPUT_FILE)
     parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Process only N corpus records beginning at --start-index.",
-    )
-    parser.add_argument(
         "--start-index",
         type=int,
         default=DEFAULT_START_INDEX,
-        help=f"1-based corpus position to begin processing (default: {DEFAULT_START_INDEX}).",
+        help=(
+            "One-based corpus record number to start from "
+            f"(default: {DEFAULT_START_INDEX})."
+        ),
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Process at most N records starting from --start-index.",
     )
     parser.add_argument(
         "--request-delay",
@@ -691,27 +769,28 @@ def main():
         default=DEFAULT_REQUEST_DELAY,
         help=f"Seconds to wait between successful requests (default: {DEFAULT_REQUEST_DELAY}).",
     )
-    parser.add_argument(
-        "--regenerate-short-claims",
-        action="store_true",
-        help=(
-            f"Regenerate saved articles containing a claim shorter than "
-            f"{MIN_CLAIM_WORDS} words instead of skipping them."
-        ),
-    )
     args = parser.parse_args()
 
-    if args.limit is not None and args.limit <= 0:
-        parser.error("--limit must be greater than 0")
     if args.start_index <= 0:
         parser.error("--start-index must be greater than 0")
+    if args.limit is not None and args.limit <= 0:
+        parser.error("--limit must be greater than 0")
     if args.request_delay < 0:
         parser.error("--request-delay cannot be negative")
 
-    # Check API key
-    if not load_xah_api_key():
-        print("ERROR: Set XAH_API_KEY in the environment/project .env or configure DEFAULT_XAH_API_KEY.")
+    # Check API keys. Gemini is preferred; OpenRouter is the quota fallback.
+    gemini_key = load_gemini_api_key()
+    openrouter_key = load_openrouter_api_key()
+    if not gemini_key and not openrouter_key:
+        print(
+            "ERROR: Set GEMINI_API_KEY and/or OPENROUTER_API_KEY "
+            "in the environment or project .env file."
+        )
         sys.exit(1)
+    if gemini_key:
+        print("Primary provider: Gemini API (free-tier quota first)")
+    if openrouter_key:
+        print("Fallback provider: OpenRouter")
 
     # Load dataset
     if not args.input_file.is_file():
@@ -720,53 +799,38 @@ def main():
 
     print(f"Loading dataset from {args.input_file}...")
     raw_records = load_dataset(args.input_file)
-    dataset_total = len(raw_records)
-    if args.start_index > dataset_total:
-        parser.error(
-            f"--start-index ({args.start_index}) exceeds dataset size ({dataset_total})"
-        )
-
     start_offset = args.start_index - 1
-    if args.limit is not None:
-        raw_records = raw_records[start_offset:start_offset + args.limit]
-    else:
-        raw_records = raw_records[start_offset:]
+    if start_offset >= len(raw_records):
+        parser.error(
+            f"--start-index {args.start_index} exceeds corpus size "
+            f"({len(raw_records)} records)"
+        )
+    end_offset = None if args.limit is None else start_offset + args.limit
+    raw_records = raw_records[start_offset:end_offset]
     articles = [
         normalize_corpus_article(record, index)
         for index, record in enumerate(raw_records, start=args.start_index)
     ]
     print(
-        f"Dataset articles: {dataset_total}. "
-        f"Starting at sample {args.start_index}; queued: {len(articles)}"
+        f"Starting at corpus record {args.start_index}; "
+        f"selected articles: {len(articles)}"
     )
 
     # Load existing results for resume
     existing = load_existing_results(args.output_file)
     if existing:
         print(f"Found {len(existing)} already-processed articles. Resuming...")
-    regenerate_ids = set()
-    if args.regenerate_short_claims:
-        regenerate_ids = {
-            article_id
-            for article_id, result in existing.items()
-            if has_short_claims(result)
-        }
-        print(
-            f"Will regenerate {len(regenerate_ids)} saved articles containing "
-            f"claims shorter than {MIN_CLAIM_WORDS} words."
-        )
 
     results = list(existing.values())
-    processed_ids = set(existing.keys()) - regenerate_ids
+    processed_ids = set(existing.keys())
 
     # Process each article
     failed_ids = []
-    total = dataset_total
+    total = len(articles)
     skipped = 0
-    processed_this_run = 0
     quota_exhausted = False
 
-    for idx, article in enumerate(articles, start=args.start_index):
+    for idx, article in enumerate(articles, start=1):
         article_id = article.get("id", f"unknown_{idx}")
 
         # Skip if already processed
@@ -778,12 +842,8 @@ def main():
 
         try:
             result = call_model_with_validation(article)
-            if article_id in regenerate_ids:
-                results = [item for item in results if str(item.get("id")) != article_id]
-                regenerate_ids.discard(article_id)
             results.append(result)
             processed_ids.add(article_id)
-            processed_this_run += 1
             print(f"  Done ({len(results)} total saved)")
         except QuotaReachedError as e:
             quota_exhausted = True
@@ -821,7 +881,7 @@ def main():
     print("PAUSED (API RATE/QUOTA LIMIT)" if quota_exhausted else "COMPLETE!")
     print(f"  Total articles: {total}")
     print(f"  Skipped (already done): {skipped}")
-    print(f"  Processed this run: {processed_this_run}")
+    print(f"  Processed this run: {len(results) - len(existing)}")
     print(f"  Total saved: {len(results)}")
     print(f"  Output: {args.output_file}")
     if failed_ids:
