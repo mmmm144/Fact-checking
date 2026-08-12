@@ -12,6 +12,7 @@ Features:
 - Fallback to justification if original_text is too short
 - Progress logging
 """
+from __future__ import annotations
 
 import argparse
 import json
@@ -87,9 +88,6 @@ RÀNG BUỘC RIÊNG CHO NOT_ENOUGH_INFO:
 ĐỊNH DẠNG ĐẦU RA (OUTPUT FORMAT):
 Bạn CHỈ ĐƯỢC PHÉP trả về duy nhất một chuỗi JSON hợp lệ, tuyệt đối không giải thích thêm, không dùng markdown ```json...``` bao quanh. Cấu trúc JSON đầu ra bắt buộc phải tuân theo format mẫu sau:
 {
-"id": "[Lấy từ id của dữ liệu đầu vào]",
-"date_iso": "[Lấy từ publish_date của dữ liệu đầu vào, thêm T00:00:00 nếu cần]",
-"full_text": "[ORIGINAL_TEXT]",
 "claims": {
 "SUPPORTED": [
 {
@@ -266,7 +264,12 @@ def call_provider_api(
         response_body = error.read().decode("utf-8", errors="replace")
         try:
             error_data = json.loads(response_body)
-            error_value = error_data.get("error", error_data)
+            if isinstance(error_data, list) and error_data:
+                error_value = error_data[0].get("error", error_data[0])
+            elif isinstance(error_data, dict):
+                error_value = error_data.get("error", error_data)
+            else:
+                error_value = error_data
             if isinstance(error_value, dict):
                 message = str(error_value.get("message") or error_value)
                 details = error_value.get("details")
@@ -534,9 +537,9 @@ def log_debug(article_id: str, attempt: int, raw_content: str, error_msg: str):
         f.write(f"Article ID: {article_id} | Attempt: {attempt}\n")
         f.write(f"Error: {error_msg}\n")
         f.write(f"Raw response ({len(raw_content)} chars):\n")
-        # Log first 2000 chars to avoid huge log files
-        f.write(raw_content[:2000])
-        if len(raw_content) > 2000:
+        # Log first 50000 chars to avoid huge log files
+        f.write(raw_content[:50000])
+        if len(raw_content) > 50000:
             f.write(f"\n... [truncated, total {len(raw_content)} chars]")
         f.write(f"\n{'='*80}\n")
 
@@ -559,6 +562,9 @@ def extract_json_from_response(content: str) -> dict:
     content = re.sub(r"^```(?:json)?\s*\n?", "", content)
     content = re.sub(r"\n?```\s*$", "", content)
     content = content.strip()
+
+    # Sanitize invalid backslashes that are not part of valid JSON escape sequences
+    content = re.sub(r'\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})', r'\\\\', content)
 
     # Try direct parse
     try:
@@ -664,6 +670,13 @@ def call_model_with_validation(article: dict) -> dict:
             # Parse JSON
             result = extract_json_from_response(content)
 
+            # Ensure consistent id/date/full_text from source (set before validation)
+            if not isinstance(result, dict):
+                result = {}
+            result["id"] = article_id
+            result["date_iso"] = normalize_date(article.get("publish_date"))
+            result["full_text"] = get_article_content(article)
+
             # Validate schema
             validation_errors = validate_output_schema(result, article_id)
             if validation_errors:
@@ -677,10 +690,6 @@ def call_model_with_validation(article: dict) -> dict:
                 else:
                     print(f"  [WARNING] Accepting partial result for {article_id}")
                     break
-
-            # Ensure consistent id/date/full_text from source
-            result["id"] = article_id
-            result["date_iso"] = normalize_date(article.get("publish_date"))
             result["full_text"] = get_article_content(article)
 
             return result

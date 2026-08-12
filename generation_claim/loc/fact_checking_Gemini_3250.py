@@ -12,6 +12,7 @@ Features:
 - Fallback to justification if original_text is too short
 - Progress logging
 """
+from __future__ import annotations
 
 import argparse
 import json
@@ -559,6 +560,9 @@ def extract_json_from_response(content: str) -> dict:
     content = re.sub(r"^```(?:json)?\s*\n?", "", content)
     content = re.sub(r"\n?```\s*$", "", content)
     content = content.strip()
+
+    # Sanitize invalid backslashes that are not part of valid JSON escape sequences
+    content = re.sub(r'\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})', r'\\\\', content)
 
     # Try direct parse
     try:
