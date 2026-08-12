@@ -9,8 +9,10 @@ token. T?p v?o/ra ??u ???c x? l? tu?n t? ?? tr?nh gi? to?n b? corpus trong RAM.
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -35,15 +37,19 @@ DEFAULT_MODEL = "BAAI/bge-m3"
 class Tokenizer(Protocol):
     """Ph?n giao di?n tokenizer m? logic chunking s? d?ng."""
 
-    def encode(self, text: str, *, add_special_tokens: bool) -> list[int]: ...
-
-    def decode(
+    def __call__(
         self,
-        token_ids: Sequence[int],
+        text: str,
         *,
-        skip_special_tokens: bool,
-        clean_up_tokenization_spaces: bool,
-    ) -> str: ...
+        add_special_tokens: bool,
+        return_offsets_mapping: bool,
+        verbose: bool,
+    ) -> Any: ...
+
+
+SENTENCE_BOUNDARY_RE = re.compile(
+    r"(?:[.!?\u2026]+[\"'\u201d\u2019\u00bb)\]]*)(?=\s|$)|\n+"
+)
 
 
 def iter_json_array(path: Path, block_size: int = 1024 * 1024) -> Iterator[Any]:
@@ -143,11 +149,129 @@ def chunk_token_ids(
             break
 
 
+def sentence_char_spans(text: str) -> list[tuple[int, int]]:
+    """Return trimmed character spans for sentences and explicit lines."""
+
+    boundaries = [0, *(m.end() for m in SENTENCE_BOUNDARY_RE.finditer(text))]
+    if boundaries[-1] != len(text):
+        boundaries.append(len(text))
+    spans = []
+    for start, end in zip(boundaries, boundaries[1:]):
+        while start < end and text[start].isspace():
+            start += 1
+        while end > start and text[end - 1].isspace():
+            end -= 1
+        if start < end:
+            spans.append((start, end))
+    return spans
+
+
+def _tokenize_with_offsets(text: str, tokenizer: Tokenizer):
+    encoded = tokenizer(
+        text,
+        add_special_tokens=False,
+        return_offsets_mapping=True,
+        verbose=False,
+    )
+    token_ids = list(encoded["input_ids"])
+    offsets = [tuple(offset) for offset in encoded["offset_mapping"]]
+    if len(token_ids) != len(offsets):
+        raise ValueError("tokenizer returned mismatched input_ids and offsets")
+    if any(start < 0 or end <= start or end > len(text) for start, end in offsets):
+        raise ValueError("tokenizer returned invalid offset_mapping")
+    return token_ids, offsets
+
+
+def _sentence_token_spans(
+    text: str, offsets: Sequence[tuple[int, int]]
+) -> list[tuple[int, int]]:
+    """Project source sentence spans onto BGE-M3 token ranges."""
+
+    if not offsets:
+        return []
+    token_end_chars = [end for _, end in offsets]
+    spans = []
+    token_start = 0
+    for _, char_end in sentence_char_spans(text):
+        token_end = bisect.bisect_right(token_end_chars, char_end)
+        if token_end > token_start:
+            spans.append((token_start, token_end))
+            token_start = token_end
+    if token_start < len(offsets):
+        spans.append((token_start, len(offsets)))
+    return spans
+
+
+def sentence_aware_token_ranges(
+    token_count: int,
+    sentence_spans: Sequence[tuple[int, int]],
+    chunk_size: int,
+    overlap: int,
+    min_chunk_size: int,
+) -> list[tuple[int, int]]:
+    """Create ranges <= chunk_size, preferring sentence boundaries."""
+
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than 0")
+    if overlap < 0 or overlap >= chunk_size:
+        raise ValueError("overlap must be >= 0 and less than chunk_size")
+    if min_chunk_size <= 0 or min_chunk_size > chunk_size:
+        raise ValueError("min_chunk_size must be between 1 and chunk_size")
+    if token_count == 0:
+        return []
+
+    boundaries = sorted(
+        {0, token_count, *(end for _, end in sentence_spans if 0 < end < token_count)}
+    )
+    ranges = []
+    start = 0
+    while start < token_count:
+        max_end = min(start + chunk_size, token_count)
+        boundary_index = bisect.bisect_right(boundaries, max_end) - 1
+        end = boundaries[boundary_index]
+        if end <= start:
+            # Only an oversized sentence is split at a hard token boundary.
+            end = max_end
+        ranges.append((start, end))
+        if end == token_count:
+            break
+
+        if overlap == 0:
+            start = end
+            continue
+
+        desired_start = max(start + 1, end - overlap)
+        boundary_index = bisect.bisect_left(boundaries, desired_start)
+        if boundary_index < len(boundaries) and boundaries[boundary_index] < end:
+            start = boundaries[boundary_index]
+        else:
+            start = max(start + 1, end - overlap)
+
+    # Merge a weak tail when possible; otherwise enlarge its overlap.
+    if len(ranges) >= 2 and ranges[-1][1] - ranges[-1][0] < min_chunk_size:
+        previous_start, _ = ranges[-2]
+        final_end = ranges[-1][1]
+        if final_end - previous_start <= chunk_size:
+            ranges[-2] = (previous_start, final_end)
+            ranges.pop()
+        else:
+            lower_bound = max(previous_start + 1, final_end - chunk_size)
+            upper_bound = final_end - min_chunk_size
+            boundary_index = bisect.bisect_right(boundaries, upper_bound) - 1
+            extended_start = boundaries[boundary_index]
+            if extended_start < lower_bound:
+                extended_start = upper_bound
+            ranges[-1] = (extended_start, final_end)
+
+    return ranges
+
+
 def chunk_document(
     document: dict[str, Any],
     tokenizer: Tokenizer,
     chunk_size: int,
     overlap: int,
+    min_chunk_size: int = 64,
 ) -> Iterator[dict[str, Any]]:
     """Chia tr??ng ``text`` c?a m?t t?i li?u v? gi? metadata ngu?n."""
 
@@ -159,25 +283,31 @@ def chunk_document(
     if not isinstance(text, str):
         raise ValueError(f"t?i li?u {doc_id} c? tr??ng text kh?ng ph?i chu?i")
 
-    token_ids = tokenizer.encode(text, add_special_tokens=False)
+    token_ids, offsets = _tokenize_with_offsets(text, tokenizer)
     if not token_ids:
         return
+
+    sentence_spans = _sentence_token_spans(text, offsets)
+    ranges = sentence_aware_token_ranges(
+        len(token_ids), sentence_spans, chunk_size, overlap, min_chunk_size
+    )
+    sentence_starts = [start for start, _ in sentence_spans]
+    sentence_ends = [end for _, end in sentence_spans]
 
     source_fields = {
         key: value
         for key, value in document.items()
         if key not in {"doc_id", "text"}
     }
-    for chunk_index, (start, end, ids) in enumerate(
-        chunk_token_ids(token_ids, chunk_size, overlap)
-    ):
-        chunk_text = tokenizer.decode(
-            ids,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        ).strip()
+    for chunk_index, (start, end) in enumerate(ranges):
+        char_start = offsets[start][0]
+        char_end = offsets[end - 1][1]
+        chunk_text = text[char_start:char_end]
         if not chunk_text:
             continue
+
+        sentence_start = bisect.bisect_right(sentence_ends, start)
+        sentence_end = bisect.bisect_left(sentence_starts, end)
 
         yield {
             **source_fields,
@@ -186,7 +316,11 @@ def chunk_document(
             "chunk_index": chunk_index,
             "token_start": start,
             "token_end": end,
-            "token_count": len(ids),
+            "token_count": end - start,
+            "char_start": char_start,
+            "char_end": char_end,
+            "sentence_start": sentence_start,
+            "sentence_end": sentence_end,
             "text": chunk_text,
         }
 
@@ -218,6 +352,7 @@ def _write_chunks_atomic(
     tokenizer: Tokenizer,
     chunk_size: int,
     overlap: int,
+    min_chunk_size: int,
     progress_every: int,
 ) -> tuple[int, int, int]:
     """Ghi m?ng chunk JSON tu?n t? r?i thay file ??ch atomically."""
@@ -252,7 +387,13 @@ def _write_chunks_atomic(
                     continue
 
                 try:
-                    chunks = chunk_document(document, tokenizer, chunk_size, overlap)
+                    chunks = chunk_document(
+                        document,
+                        tokenizer,
+                        chunk_size,
+                        overlap,
+                        min_chunk_size,
+                    )
                     wrote_chunk = False
                     for chunk in chunks:
                         if not first_chunk:
@@ -291,74 +432,19 @@ def write_chunks(
     chunk_size: int,
     overlap: int,
     progress_every: int,
+    min_chunk_size: int = 64,
 ) -> tuple[int, int, int]:
-    """Write each document's chunks directly and flush them immediately."""
+    """Stream chunks to a temp file and atomically replace the destination."""
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    document_count = 0
-    chunk_count = 0
-    skipped_count = 0
-
-    with output_path.open("w", encoding="utf-8", newline="\n") as output_file:
-        output_file.write("[\n")
-        output_file.flush()
-        first_chunk = True
-
-        try:
-            for document_count, document in enumerate(documents, start=1):
-                document_chunk_count = 0
-                doc_id = (
-                    str(document.get("doc_id", "")).strip()
-                    if isinstance(document, dict)
-                    else "<invalid>"
-                )
-
-                if not isinstance(document, dict):
-                    skipped_count += 1
-                    print(
-                        f"Warning: skipping item #{document_count}; "
-                        "it is not a JSON object",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-                else:
-                    try:
-                        chunks = chunk_document(
-                            document, tokenizer, chunk_size, overlap
-                        )
-                        wrote_chunk = False
-                        for chunk in chunks:
-                            if not first_chunk:
-                                output_file.write(",\n")
-                            json.dump(chunk, output_file, ensure_ascii=False)
-                            first_chunk = False
-                            wrote_chunk = True
-                            document_chunk_count += 1
-                            chunk_count += 1
-                        if not wrote_chunk:
-                            skipped_count += 1
-                    except ValueError as exc:
-                        skipped_count += 1
-                        print(
-                            f"Warning: skipping {exc}",
-                            file=sys.stderr,
-                            flush=True,
-                        )
-
-                output_file.flush()
-                if progress_every and document_count % progress_every == 0:
-                    print(
-                        f"[{document_count:,}] {doc_id}: "
-                        f"wrote {document_chunk_count:,} chunks "
-                        f"(total: {chunk_count:,})",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-        finally:
-            output_file.write("\n]\n")
-            output_file.flush()
-
-    return document_count, chunk_count, skipped_count
+    return _write_chunks_atomic(
+        documents,
+        output_path,
+        tokenizer,
+        chunk_size,
+        overlap,
+        min_chunk_size,
+        progress_every,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -369,8 +455,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--chunk-size", type=int, default=512)
-    parser.add_argument("--overlap", type=int, default=0)
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=512,
+        help="Maximum BGE-M3 tokens per chunk (default: 512)",
+    )
+    parser.add_argument(
+        "--overlap",
+        type=int,
+        default=64,
+        help="Target token overlap, aligned to sentence boundaries (default: 64)",
+    )
+    parser.add_argument(
+        "--min-chunk-size",
+        type=int,
+        default=64,
+        help="Minimum tail size; merge or extend overlap when smaller (default: 64)",
+    )
     parser.add_argument(
         "--progress-every",
         type=int,
@@ -409,6 +511,12 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+    if args.min_chunk_size <= 0 or args.min_chunk_size > args.chunk_size:
+        print(
+            "Error: --min-chunk-size must be > 0 and <= --chunk-size",
+            file=sys.stderr,
+        )
+        return 2
     if args.progress_every < 0:
         print("Error: --progress-every cannot be negative", file=sys.stderr)
         return 2
@@ -422,6 +530,7 @@ def main() -> int:
             args.chunk_size,
             args.overlap,
             args.progress_every,
+            args.min_chunk_size,
         )
     except (OSError, RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
