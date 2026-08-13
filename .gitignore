@@ -8,4 +8,8 @@ env/
 venv/
 data/vie/raw/facebook_cookies.json 
 src/clean_normalize/output/corpus_v1.json
-.env 
+.env
+
+# Generated embedding artifacts (store these on Hugging Face, not GitHub)
+embedding/smoke-output/
+embedding/**/*.parquet

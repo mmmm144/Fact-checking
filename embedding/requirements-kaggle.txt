@@ -1,0 +1,5 @@
+datasets>=3.2,<5
+huggingface_hub[hf_xet]>=0.28,<2
+pyarrow>=18,<24
+sentence-transformers>=3.3,<6
+tqdm>=4.66,<5
