@@ -13,3 +13,12 @@ src/clean_normalize/output/corpus_v1.json
 # Generated embedding artifacts (store these on Hugging Face, not GitHub)
 embedding/smoke-output/
 embedding/**/*.parquet
+
+# Generated retrieval indexes and evaluation artifacts belong on Hugging Face
+retrieval/**/faiss.index
+retrieval/**/metadata.parquet
+retrieval/**/*.npy
+retrieval/**/per_query.jsonl
+retrieval/**/summary.csv
+retrieval/retrieval_indexes/
+retrieval/retrieval_evaluation/
