@@ -56,8 +56,10 @@ BM25/dense/RRF/reranker liên quan.
 
 ## Đánh giá
 
-Notebook mặc định lấy mẫu cố định 500 claim `SUPPORTED`/`REFUTED` có evidence
-từ hai file `claim_01_part*.json`. Kết quả gồm:
+Notebook mặc định tải `data/claim_01.json` từ dataset
+[`Loctran123/vietnamese-fact-checking-claims`](https://huggingface.co/datasets/Loctran123/vietnamese-fact-checking-claims)
+và lấy mẫu cố định 500 claim `SUPPORTED`/`REFUTED` có evidence. Revision của
+dataset được pin trong notebook để kết quả có thể tái lập. Kết quả gồm:
 
 - `summary.csv`: Recall/Hit@1,5,10,50, MRR@10, nDCG@10 và latency;
 - `per_query.jsonl`: top 10 của mỗi chiến lược cho từng claim;
