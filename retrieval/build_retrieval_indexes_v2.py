@@ -19,10 +19,10 @@ from tqdm.auto import tqdm
 
 
 DEFAULT_EMBEDDING_REPO = os.getenv(
-    "HF_EMBEDDING_REPO", "Loctran123/vietnamese-evidence-corpus-embeddings-e5-large-v2"
+    "HF_EMBEDDING_REPO", "Loctran123/vietnamese-evidence-corpus-embeddings-e5-large-v2-r1"
 )
 DEFAULT_OUTPUT_REPO = os.getenv(
-    "HF_INDEX_REPO", "Loctran123/vietnamese-evidence-retrieval-indexes-v2"
+    "HF_INDEX_REPO", "Loctran123/vietnamese-evidence-retrieval-indexes-v2-r1"
 )
 BM25_TOKEN_PATTERN = r"(?u)\b\w+\b"
 EMBEDDING_DIMENSION = 1024

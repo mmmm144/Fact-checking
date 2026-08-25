@@ -33,7 +33,7 @@ DEFAULT_SOURCE_REPO = os.getenv(
     "HF_CHUNK_REPO", "Loctran123/vietnamese-evidence-corpus-chunked-e5-v2"
 )
 DEFAULT_OUTPUT_REPO = os.getenv(
-    "HF_EMBEDDING_REPO", "Loctran123/vietnamese-evidence-corpus-embeddings-e5-large-v2"
+    "HF_EMBEDDING_REPO", "Loctran123/vietnamese-evidence-corpus-embeddings-e5-large-v2-r1"
 )
 DEFAULT_MODEL = "intfloat/multilingual-e5-large"
 DEFAULT_COLUMNS = (
