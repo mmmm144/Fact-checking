@@ -1,13 +1,13 @@
 # Embedding corpus bằng multilingual-e5-large trên Kaggle
 
 Pipeline này đọc trực tiếp bộ chunk từ
-[`Loctran123/vietnamese-evidence-corpus-chunked`](https://huggingface.co/datasets/Loctran123/vietnamese-evidence-corpus-chunked),
+[`Loctran123/vietnamese-evidence-corpus-chunked-e5-v2`](https://huggingface.co/datasets/Loctran123/vietnamese-evidence-corpus-chunked-e5-v2),
 tạo passage embedding bằng
 [`intfloat/multilingual-e5-large`](https://huggingface.co/intfloat/multilingual-e5-large),
 ghi Parquet theo shard và tải từng shard lên Hugging Face.
 
 Mặc định, kết quả được ghi vào dataset riêng:
-`Loctran123/vietnamese-evidence-corpus-embeddings-e5-large`. Pipeline cố ý
+`Loctran123/vietnamese-evidence-corpus-embeddings-e5-large-v2`. Pipeline cố ý
 không ghi vào dataset chunk gốc.
 
 ## Chạy trên Kaggle
@@ -28,9 +28,9 @@ Không đưa token vào cell, Git commit, output notebook hoặc URL remote.
 
 ```bash
 python embedding/embed_e5_kaggle.py \
-  --source-repo Loctran123/vietnamese-evidence-corpus-chunked \
+  --source-repo Loctran123/vietnamese-evidence-corpus-chunked-e5-v2 \
   --source-revision 3303a74a1ee6c23f231d9471d1eaa6d1a3009e12 \
-  --output-repo Loctran123/vietnamese-evidence-corpus-embeddings-e5-large \
+  --output-repo Loctran123/vietnamese-evidence-corpus-embeddings-e5-large-v2 \
   --batch-size 24 \
   --rows-per-shard 5000
 ```

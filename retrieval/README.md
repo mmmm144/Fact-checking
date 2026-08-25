@@ -1,7 +1,7 @@
 # Hybrid evidence retrieval trên Kaggle
 
 Pipeline này dùng embedding đã tạo tại
-[`Loctran123/vietnamese-evidence-corpus-embeddings-e5-large`](https://huggingface.co/datasets/Loctran123/vietnamese-evidence-corpus-embeddings-e5-large)
+[`Loctran123/vietnamese-evidence-corpus-embeddings-e5-large-v2`](https://huggingface.co/datasets/Loctran123/vietnamese-evidence-corpus-embeddings-e5-large-v2)
 để xây và đánh giá hệ thống retrieval:
 
 ```text
@@ -24,7 +24,7 @@ claim
 - `kaggle_hybrid_retrieval.ipynb`: notebook Kaggle end-to-end.
 
 Index mặc định được lưu lâu dài tại:
-`Loctran123/vietnamese-evidence-retrieval-indexes`. Khi repo đã có
+`Loctran123/vietnamese-evidence-retrieval-indexes-v2`. Khi repo đã có
 `manifest.json` hoàn chỉnh, notebook chỉ tải index về thay vì build lại.
 
 ## Cấu hình mặc định
