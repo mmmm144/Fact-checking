@@ -13,10 +13,14 @@ from huggingface_hub import HfApi
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CORPUS = (
-    PROJECT_ROOT / "data" / "vie" / "processed" / "corpus_v1_chunked.json"
+    PROJECT_ROOT / "data" / "vie" / "processed" / "corpus_v1_chunked_e5_v2.json"
 )
-DEFAULT_REPO_ID = "Loctran123/vietnamese-evidence-corpus-chunked"
-DEFAULT_PATH_IN_REPO = "data/corpus_v1_chunked.json"
+DEFAULT_REPO_ID = os.getenv(
+    "HF_CHUNK_REPO", "Loctran123/vietnamese-evidence-corpus-chunked-e5-v2"
+)
+DEFAULT_PATH_IN_REPO = os.getenv(
+    "HF_CHUNK_PATH_IN_REPO", "data/corpus_v1_chunked_e5_v2.json"
+)
 ENV_FILE = PROJECT_ROOT / ".env"
 TOKEN_VARIABLE = "HUGGING_FACE_HUB_TOKEN"
 
