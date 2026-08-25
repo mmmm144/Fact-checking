@@ -13,13 +13,13 @@ from huggingface_hub import HfApi
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CORPUS = (
-    PROJECT_ROOT / "data" / "vie" / "processed" / "corpus_v1_chunked_e5_v2.json"
+    PROJECT_ROOT / "data" / "vie" / "processed" / "corpus_v1_chunked_e5_v3.json"
 )
 DEFAULT_REPO_ID = os.getenv(
-    "HF_CHUNK_REPO", "Loctran123/vietnamese-evidence-corpus-chunked-e5-v2"
+    "HF_CHUNK_REPO", "Loctran123/vietnamese-evidence-corpus-chunked-e5-v3"
 )
 DEFAULT_PATH_IN_REPO = os.getenv(
-    "HF_CHUNK_PATH_IN_REPO", "data/corpus_v1_chunked_e5_v2.json"
+    "HF_CHUNK_PATH_IN_REPO", "data/corpus_v1_chunked_e5_v3.json"
 )
 ENV_FILE = PROJECT_ROOT / ".env"
 TOKEN_VARIABLE = "HUGGING_FACE_HUB_TOKEN"
@@ -82,9 +82,9 @@ retrieval-augmented generation, and fact-checking experiments.
 
 ## Statistics
 
-- 47,679 chunks from 13,572 source documents
-- 38,603 Vietnamese chunks and 9,076 English chunks
-- Maximum chunk length: 512 BGE-M3 tokenizer tokens
+- Chunked with multilingual-E5 token budget
+- Prefix-aware chunking using `passage: {{title}}\n\n`
+- Sentence-aware overlap to preserve local context
 
 ## Main fields
 
@@ -95,7 +95,7 @@ retrieval-augmented generation, and fact-checking experiments.
 - `language`, `country`, `publish_date`, `crawl_date`, `url`, `author`
 - `metadata`, `quality`
 
-For embedding, use `title + "\\n\\n" + text` as the embedding input and keep
+For embedding, use `passage: {{title}}\\n\\n` plus `text` as the embedding input and keep
 the remaining fields as filter/citation metadata.
 
 ## Loading
