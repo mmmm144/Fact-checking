@@ -1,4 +1,4 @@
-"""Create normalized multilingual-e5-large passage embeddings on Kaggle.
+﻿"""Create normalized multilingual-e5-large passage embeddings on Kaggle.
 
 The script streams a chunked corpus from Hugging Face (or a local JSON file),
 writes deterministic Parquet shards, and optionally uploads each completed shard
@@ -300,15 +300,6 @@ def write_shard(
     shard_index: int,
 ) -> tuple[Path, int]:
     texts = [build_input_text(row) for row in rows]
-    tokenizer = model.tokenizer
-    lengths = [len(tokenizer(text, add_special_tokens=True)["input_ids"]) for text in texts]
-    if lengths and max(lengths) > MAX_TOKENS:
-        longest_index = int(np.argmax(lengths))
-        longest_chunk = rows[longest_index].get("chunk_id")
-        raise RuntimeError(
-            f"Embedding input exceeds {MAX_TOKENS} tokens after prefix and special tokens: "
-            f"chunk_id={longest_chunk}, length={lengths[longest_index]}"
-        )
 
     dedup_rows: list[dict[str, Any]] = []
     dedup_texts: list[str] = []
@@ -405,7 +396,7 @@ Normalized passage embeddings for `{source}`, generated with
 - Embedding dimension: 1024
 - Embedding dtype: float32
 - Input: `passage: {{title}}\n\n{{text}}`
-- Max tokens checked before embedding: {MAX_TOKENS}
+- Inputs truncated to {MAX_TOKENS} tokens before embedding
 - Deduplicated before embedding by normalized `content_hash`
 - Provenance retained for duplicate content
 - L2 normalized: yes
@@ -433,6 +424,7 @@ def finalize(
         "normalized": True,
         "input_mode": "passage_title_plus_text",
         "max_tokens": MAX_TOKENS,
+        "truncate_inputs": True,
     }
     manifest_path = args.output_dir / "manifest.json"
     card_path = args.output_dir / "README.md"
@@ -524,3 +516,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
