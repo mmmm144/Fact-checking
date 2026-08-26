@@ -301,6 +301,57 @@ def sentence_aware_token_ranges(
     return ranges
 
 
+def passage_token_length(title: str, chunk_text: str, tokenizer: Tokenizer) -> int:
+    prefix = f"passage: {title.strip()}\n\n"
+    return len(tokenizer(prefix + chunk_text, add_special_tokens=True, verbose=False)["input_ids"])
+
+
+def fit_range_to_budget(
+    title: str,
+    text: str,
+    offsets: Sequence[tuple[int, int]],
+    start: int,
+    end: int,
+    tokenizer: Tokenizer,
+    budget: int,
+    sentence_ends: Sequence[int],
+) -> int:
+    if start >= end:
+        return end
+
+    def chunk_length(candidate_end: int) -> int:
+        char_start = offsets[start][0]
+        char_end = offsets[candidate_end - 1][1]
+        chunk_text = text[char_start:char_end]
+        return passage_token_length(title, chunk_text, tokenizer)
+
+    if chunk_length(end) <= budget:
+        return end
+
+    candidate_sentence_ends = [item for item in sentence_ends if start < item <= end]
+    for candidate_end in reversed(candidate_sentence_ends):
+        if chunk_length(candidate_end) <= budget:
+            return candidate_end
+
+    low = start + 1
+    high = end
+    best = None
+    while low <= high:
+        middle = (low + high) // 2
+        current_length = chunk_length(middle)
+        if current_length <= budget:
+            best = middle
+            low = middle + 1
+        else:
+            high = middle - 1
+
+    if best is None:
+        raise ValueError(
+            f"Unable to fit chunk for title={title!r} within {budget} tokens"
+        )
+    return best
+
+
 def chunk_document(
     document: dict[str, Any],
     tokenizer: Tokenizer,
@@ -342,6 +393,16 @@ def chunk_document(
         if key not in {"doc_id", "text"}
     }
     for chunk_index, (start, end) in enumerate(ranges):
+        end = fit_range_to_budget(
+            title,
+            text,
+            offsets,
+            start,
+            end,
+            tokenizer,
+            chunk_size,
+            sentence_ends,
+        )
         char_start = offsets[start][0]
         char_end = offsets[end - 1][1]
         chunk_text = text[char_start:char_end]

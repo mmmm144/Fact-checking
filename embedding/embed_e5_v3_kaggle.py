@@ -233,7 +233,7 @@ def load_model(model_id: str, device: str) -> SentenceTransformer:
     model.eval()
     if device.startswith("cuda"):
         torch.backends.cuda.matmul.allow_tf32 = True
-    dimension = model.get_sentence_embedding_dimension()
+    dimension = model.get_embedding_dimension()
     if dimension != 1024:
         raise RuntimeError(f"Expected 1024-dimensional E5-large vectors, got {dimension}.")
     return model
