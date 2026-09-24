@@ -25,3 +25,6 @@ retrieval/**/per_query.jsonl
 retrieval/**/summary.csv
 retrieval/retrieval_indexes/
 retrieval/retrieval_evaluation/
+
+# Local project-management workbooks
+outputs/vifc-progress-tracker-*/
