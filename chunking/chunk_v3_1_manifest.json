@@ -1,0 +1,32 @@
+{
+  "status": "complete_local",
+  "created_date": "2026-09-24",
+  "source": {
+    "repo": "aiMy144/viet-fact-checking",
+    "revision": "61ec51be1ca8270af4ec7ecb06d4e88a1431c488",
+    "file": "corpus_v1.json",
+    "sha256": "09257d86767ccfc7462e9849818f25c9ecdfb8674731660e8b694a6183cc39fd",
+    "documents": 13572
+  },
+  "chunking": {
+    "model_id": "intfloat/multilingual-e5-large",
+    "chunk_size": 512,
+    "overlap": 64,
+    "min_chunk_size": 64,
+    "prefix": "passage: {title}\\n\\n",
+    "sentence_aware": true,
+    "boilerplate_rules": [
+      "BaoChinhPhu related-article suffix",
+      "VnExpress Google preferred-source tutorial and adjacent related links"
+    ],
+    "script_sha256": "b2025287cf83ba2052169c16bd2d5e7bd4aa59b7c1f2186a2822f00a0adc00ab"
+  },
+  "output": {
+    "local_file": "data/vie/processed/corpus_v1_chunked_e5_v3_1.json",
+    "sha256": "5e143703b29c6207da36dea7e1a9a3f6e453e2e00284160ca5fe6b3ced0d5df5",
+    "chunks": 53861,
+    "unique_normalized_passages": 53747,
+    "duplicate_content_hash_rows": 114,
+    "documents": 13572
+  }
+}

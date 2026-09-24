@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Chia corpus JSON thành các chunk theo token của multilingual-E5.
 
-M?i ph?n t? ??u ra l? m?t chunk ph?ng. C?c tr??ng c?a t?i li?u ngu?n ???c gi?
-nguy?n, ri?ng ``text`` ???c thay b?ng n?i dung chunk v? b? sung th?ng tin v? tr?
-token. T?p v?o/ra ??u ???c x? l? tu?n t? ?? tr?nh gi? to?n b? corpus trong RAM.
+Mỗi phần tử đầu ra là một chunk phẳng. Các trường của tài liệu nguồn được giữ
+nguyên, riêng ``text`` được thay bằng nội dung chunk và bổ sung thông tin vị trí
+token. Tệp vào/ra được xử lý tuần tự để tránh giữ toàn bộ corpus trong RAM.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import tempfile
+import unicodedata
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Protocol, Sequence
 
@@ -69,13 +70,60 @@ BOILERPLATE_LINE_PATTERNS = [
     ]
 ]
 
+SOURCE_SUFFIX_PATTERNS = {
+    # Báo Chính phủ appends related-article cards as lines beginning with this
+    # exact marker. Remove the whole suffix, but only for this source so normal
+    # prose such as "có thể tham khảo thêm tài liệu" remains untouched.
+    "baochinhphu": re.compile(r"(?m)^[ \t]*Tham khảo thêm(?:[ \t:]|$)"),
+    # The VnExpress crawler retained a multi-line Google preferred-source
+    # tutorial at the end of most articles.
+    "vnexpress": re.compile(
+        r"(?m)^[ \t]*Bước 1:[^\n]*Thêm VnExpress trên Google"
+    ),
+}
+
+
+def normalize_source_key(source: str | None) -> str:
+    normalized = unicodedata.normalize("NFKD", source or "")
+    ascii_text = "".join(char for char in normalized if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", "", ascii_text.casefold())
+
+
+def suffix_start(text: str, source_key: str) -> int | None:
+    suffix_pattern = SOURCE_SUFFIX_PATTERNS.get(source_key)
+    if not suffix_pattern:
+        return None
+    match = suffix_pattern.search(text)
+    if not match:
+        return None
+    start = match.start()
+    if source_key != "vnexpress":
+        return start
+
+    # Remove a standalone "Hi" and the consecutive related-link lines that
+    # immediately precede the Google tutorial, while leaving normal body text.
+    prefix = text[:start]
+    hi_match = re.search(r"(?m)^[ \t]*Hi[ \t]*\n?[ \t]*$", prefix.rstrip())
+    if hi_match and not prefix.rstrip()[hi_match.end() :]:
+        start = hi_match.start()
+        prefix = text[:start]
+    related_block = re.search(r"(?m)(?:^[ \t]*>>[^\n]*(?:\n|$))+$", prefix.rstrip() + "\n")
+    if related_block:
+        start = related_block.start()
+    return start
+
 def normalize_for_dedup(text: str) -> str:
     return " ".join(text.split()).casefold()
 
 
-def clean_boilerplate_text(text: str) -> str:
+def clean_boilerplate_text(text: str, source: str | None = None) -> str:
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    start = suffix_start(text, normalize_source_key(source))
+    if start is not None:
+        text = text[:start]
+
     lines: list[str] = []
-    for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+    for line in text.split("\n"):
         stripped = line.strip()
         if not stripped:
             lines.append("")
@@ -88,7 +136,7 @@ def clean_boilerplate_text(text: str) -> str:
     return cleaned.strip()
 
 def iter_json_array(path: Path, block_size: int = 1024 * 1024) -> Iterator[Any]:
-    """??c l?n l??t c?c ph?n t? c?a m?t m?ng JSON c?p ngo?i c?ng."""
+    """Đọc lần lượt các phần tử của một mảng JSON cấp ngoài cùng."""
 
     decoder = json.JSONDecoder()
     with path.open("r", encoding="utf-8-sig") as handle:
@@ -119,14 +167,14 @@ def iter_json_array(path: Path, block_size: int = 1024 * 1024) -> Iterator[Any]:
         read_more()
         skip_whitespace()
         if position >= len(buffer) or buffer[position] != "[":
-            raise ValueError(f"{path} ph?i ch?a m?t m?ng JSON ? c?p ngo?i c?ng")
+            raise ValueError(f"{path} phải chứa một mảng JSON ở cấp ngoài cùng")
         position += 1
 
         first_item = True
         while True:
             skip_whitespace()
             if position >= len(buffer):
-                raise ValueError(f"M?ng JSON trong {path} k?t th?c kh?ng h?p l?")
+                raise ValueError(f"Mảng JSON trong {path} kết thúc không hợp lệ")
 
             if buffer[position] == "]":
                 position += 1
@@ -135,18 +183,18 @@ def iter_json_array(path: Path, block_size: int = 1024 * 1024) -> Iterator[Any]:
                     read_more()
                     skip_whitespace()
                 if position < len(buffer):
-                    raise ValueError(f"{path} c? d? li?u th?a sau m?ng JSON")
+                    raise ValueError(f"{path} có dữ liệu thừa sau mảng JSON")
                 return
 
             if not first_item:
                 if buffer[position] != ",":
                     raise ValueError(
-                        f"Thi?u d?u ph?y gi?a c?c ph?n t? JSON trong {path}"
+                        f"Thiếu dấu phẩy giữa các phần tử JSON trong {path}"
                     )
                 position += 1
                 skip_whitespace()
                 if position >= len(buffer):
-                    raise ValueError(f"M?ng JSON trong {path} k?t th?c kh?ng h?p l?")
+                    raise ValueError(f"Mảng JSON trong {path} kết thúc không hợp lệ")
 
             while True:
                 try:
@@ -155,7 +203,7 @@ def iter_json_array(path: Path, block_size: int = 1024 * 1024) -> Iterator[Any]:
                 except json.JSONDecodeError as exc:
                     if eof:
                         raise ValueError(
-                            f"JSON kh?ng h?p l? trong {path}: {exc}"
+                            f"JSON không hợp lệ trong {path}: {exc}"
                         ) from exc
                     read_more()
 
@@ -167,14 +215,14 @@ def iter_json_array(path: Path, block_size: int = 1024 * 1024) -> Iterator[Any]:
 def chunk_token_ids(
     token_ids: Sequence[int], chunk_size: int, overlap: int
 ) -> Iterator[tuple[int, int, Sequence[int]]]:
-    """Sinh c?c c?a s? ``(token_start, token_end, token_ids)``."""
+    """Sinh các cửa sổ ``(token_start, token_end, token_ids)``."""
 
     if chunk_size <= 0:
-        raise ValueError("chunk_size ph?i l?n h?n 0")
+        raise ValueError("chunk_size phải lớn hơn 0")
     if overlap < 0:
-        raise ValueError("overlap kh?ng ???c ?m")
+        raise ValueError("overlap không được âm")
     if overlap >= chunk_size:
-        raise ValueError("overlap ph?i nh? h?n chunk_size")
+        raise ValueError("overlap phải nhỏ hơn chunk_size")
 
     step = chunk_size - overlap
     for start in range(0, len(token_ids), step):
@@ -363,14 +411,15 @@ def chunk_document(
 
     doc_id = str(document.get("doc_id", "")).strip()
     if not doc_id:
-        raise ValueError("t?i li?u thi?u tr??ng doc_id")
+        raise ValueError("tài liệu thiếu trường doc_id")
 
     title = str(document.get("title", "")).strip()
     text = document.get("text")
     if not isinstance(text, str):
-        raise ValueError(f"t?i li?u {doc_id} c? tr??ng text kh?ng ph?i chu?i")
+        raise ValueError(f"tài liệu {doc_id} có trường text không phải chuỗi")
 
-    text = clean_boilerplate_text(text)
+    source = document.get("source") or document.get("source_name")
+    text = clean_boilerplate_text(text, str(source) if source is not None else None)
     prefix = f"passage: {title.strip()}\n\n"
     prefix_tokens = tokenizer(prefix, add_special_tokens=False, verbose=False)["input_ids"]
     special_tokens = tokenizer.num_special_tokens_to_add(pair=False)
@@ -446,8 +495,8 @@ def load_tokenizer(model_name: str, local_files_only: bool) -> Tokenizer:
             local_files_only=local_files_only,
         )
     except Exception as exc:
-        hint = " (kh?ng c? trong cache c?c b?)" if local_files_only else ""
-        raise RuntimeError(f"Kh?ng th? n?p tokenizer {model_name!r}{hint}") from exc
+        hint = " (không có trong cache cục bộ)" if local_files_only else ""
+        raise RuntimeError(f"Không thể nạp tokenizer {model_name!r}{hint}") from exc
 
 
 def _write_chunks_atomic(
@@ -459,7 +508,7 @@ def _write_chunks_atomic(
     min_chunk_size: int,
     progress_every: int,
 ) -> tuple[int, int, int]:
-    """Ghi m?ng chunk JSON tu?n t? r?i thay file ??ch atomically."""
+    """Ghi mảng chunk JSON tuần tự rồi thay file đích atomically."""
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temp_file = tempfile.NamedTemporaryFile(
@@ -484,8 +533,8 @@ def _write_chunks_atomic(
                 if not isinstance(document, dict):
                     skipped_count += 1
                     print(
-                        f"C?nh b?o: b? qua ph?n t? #{document_count} "
-                        "v? kh?ng ph?i JSON object",
+                        f"Cảnh báo: bỏ qua phần tử #{document_count} "
+                        "vì không phải JSON object",
                         file=sys.stderr,
                     )
                     continue
@@ -510,12 +559,12 @@ def _write_chunks_atomic(
                         skipped_count += 1
                 except ValueError as exc:
                     skipped_count += 1
-                    print(f"C?nh b?o: b? qua {exc}", file=sys.stderr)
+                    print(f"Cảnh báo: bỏ qua {exc}", file=sys.stderr)
 
                 if progress_every and document_count % progress_every == 0:
                     print(
-                        f"?? x? l? {document_count:,} t?i li?u, "
-                        f"t?o {chunk_count:,} chunk...",
+                        f"Đã xử lý {document_count:,} tài liệu, "
+                        f"tạo {chunk_count:,} chunk...",
                         file=sys.stderr,
                     )
 
@@ -581,12 +630,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--progress-every",
         type=int,
         default=100,
-        help="In ti?n ?? sau m?i N t?i li?u; 0 ?? t?t",
+        help="In tiến độ sau mỗi N tài liệu; 0 để tắt",
     )
     parser.add_argument(
         "--local-files-only",
         action="store_true",
-        help="Ch? d?ng tokenizer trong Hugging Face cache",
+        help="Chỉ dùng tokenizer trong Hugging Face cache",
     )
     help_by_dest = {
         "progress_every": "Print progress every N documents; use 0 to disable",

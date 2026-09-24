@@ -51,6 +51,7 @@ def iter_claim_records(paths: Iterable[Path]) -> Iterable[dict[str, Any]]:
             raise FileNotFoundError(path)
         with path.open("rb") as handle:
             for document in ijson.items(handle, "item"):
+                source_doc_id = str(document.get("id") or "").strip()
                 groups = document.get("claims") or {}
                 for group_name, claims in groups.items():
                     for item in claims or []:
@@ -63,8 +64,14 @@ def iter_claim_records(paths: Iterable[Path]) -> Iterable[dict[str, Any]]:
                         evidence = item.get("evidence") or []
                         relevant_docs: set[str] = set()
                         quotes_by_doc: defaultdict[str, list[str]] = defaultdict(list)
+                        used_parent_for_missing_id = False
                         for entry in evidence:
-                            doc_id = str(entry.get("article_id") or "").strip()
+                            # Some generated records omit article_id even though
+                            # their quote comes from the parent document.
+                            article_id = str(entry.get("article_id") or "").strip()
+                            if not article_id:
+                                used_parent_for_missing_id = True
+                            doc_id = article_id or source_doc_id
                             if not doc_id:
                                 continue
                             relevant_docs.add(doc_id)
@@ -79,7 +86,12 @@ def iter_claim_records(paths: Iterable[Path]) -> Iterable[dict[str, Any]]:
                         yield {
                             "claim": claim,
                             "label": label,
-                            "source_doc_id": str(document.get("id") or ""),
+                            "source_doc_id": source_doc_id,
+                            "qrel_source": (
+                                "parent_fallback_missing_article_id"
+                                if used_parent_for_missing_id
+                                else "evidence_article_id"
+                            ),
                             "relevant_docs": sorted(relevant_docs),
                             "quotes_by_doc": dict(quotes_by_doc),
                         }
@@ -97,6 +109,20 @@ def reservoir_sample(
     eligible = 0
     for record in records:
         relevant = available_docs.intersection(record["relevant_docs"])
+        if not relevant and record["source_doc_id"] in available_docs:
+            # Recover typo/corrupted article IDs. Claims are grouped under the
+            # document from which they were generated, making the parent ID the
+            # conservative fallback qrel when no supplied ID is indexable.
+            fallback_doc = record["source_doc_id"]
+            fallback_quotes = [
+                quote
+                for quotes in record["quotes_by_doc"].values()
+                for quote in quotes
+            ]
+            if fallback_quotes:
+                relevant = {fallback_doc}
+                record["quotes_by_doc"] = {fallback_doc: fallback_quotes}
+                record["qrel_source"] = "parent_fallback_unindexable_article_id"
         if not relevant:
             continue
         record["relevant_docs"] = sorted(relevant)
@@ -287,6 +313,7 @@ def evaluate(args: argparse.Namespace) -> list[dict[str, Any]]:
                 "query_id": hashlib.sha1(claim.encode("utf-8")).hexdigest()[:16],
                 "claim": claim,
                 "label": record["label"],
+                "qrel_source": record["qrel_source"],
                 "relevant_doc_ids": sorted(relevant_docs),
                 "relevant_row_ids": sorted(relevant_rows),
                 "rankings": {},
