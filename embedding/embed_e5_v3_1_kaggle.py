@@ -251,6 +251,12 @@ def select_row(row: dict[str, Any], text_column: str) -> dict[str, Any]:
         selected["provenance"] = row.get("provenance")
     return selected
 
+def try_select_row(row: dict[str, Any], text_column: str) -> dict[str, Any] | None:
+    text = row.get(text_column)
+    if not isinstance(text, str) or not text.strip():
+        return None
+    return select_row(row, text_column)
+
 
 def normalized_hash(text: str) -> str:
     normalized = " ".join(text.split()).casefold()
@@ -415,6 +421,7 @@ def finalize(
     token: str | None,
     total_rows: int,
     shard_count: int,
+    skipped_rows: int,
 ) -> None:
     manifest = {
         "status": "complete",
@@ -426,6 +433,7 @@ def finalize(
         "input_mode": "passage_title_plus_text",
         "max_tokens": MAX_TOKENS,
         "truncate_inputs": True,
+        "skipped_empty_text_rows": skipped_rows,
     }
     manifest_path = args.output_dir / "manifest.json"
     card_path = args.output_dir / "README.md"
@@ -486,12 +494,21 @@ def main() -> None:
     rows: list[dict[str, Any]] = []
     shard_index = 0
     processed_now = 0
+    skipped_now = 0
     progress = tqdm(desc="Collecting chunks", unit="rows")
     for row in take_rows(source, args.max_rows):
-        rows.append(select_row(row, args.text_column))
+        selected = try_select_row(row, args.text_column)
+        if selected is None:
+            skipped_now += 1
+            progress.update(1)
+            continue
+        rows.append(selected)
         processed_now += 1
         progress.update(1)
     progress.close()
+
+    if skipped_now:
+        print(f"Skipped {skipped_now:,} source rows with missing or empty {args.text_column!r}.")
 
     dedup_rows = deduplicate_rows(rows)
     print(
@@ -509,7 +526,7 @@ def main() -> None:
             print(f"Uploaded data/{shard_path.name}")
         shard_index += 1
 
-    finalize(api, args, token, total_rows=embedded_now, shard_count=shard_index)
+    finalize(api, args, token, total_rows=embedded_now, shard_count=shard_index, skipped_rows=skipped_now)
     print(f"Complete: {embedded_now:,} embedded rows from {processed_now:,} source chunks in {shard_index} shard(s).")
     if api is not None:
         print(f"https://huggingface.co/datasets/{args.output_repo}")
