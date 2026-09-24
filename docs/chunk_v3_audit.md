@@ -4,6 +4,13 @@ Artifact audited:
 `Loctran123/vietnamese-evidence-corpus-chunked-e5-v3` at revision
 `d669d204dbb4d245e980aa18aa1bd7caf314504e`.
 
+The repaired artifacts are published at:
+
+- Chunk v3.1: `aiMy144/vietnamese-evidence-corpus-chunked-e5-v3-1`, initial
+  data revision `b3b48a2c55c0058200307e9a23f776228bd63ba8`.
+- Claims v3.1: `aiMy144/vietnamese-fact-checking-claims-v3-1`, revision
+  `e20c1eddcbb4a5de862dbc6965eabee43c9766da`.
+
 ## Results
 
 ### Published v3 before repair

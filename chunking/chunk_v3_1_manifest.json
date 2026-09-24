@@ -1,6 +1,11 @@
 {
-  "status": "complete_local",
+  "status": "complete",
   "created_date": "2026-09-24",
+  "publication": {
+    "repo": "aiMy144/vietnamese-evidence-corpus-chunked-e5-v3-1",
+    "repo_type": "dataset",
+    "data_revision": "b3b48a2c55c0058200307e9a23f776228bd63ba8"
+  },
   "source": {
     "repo": "aiMy144/viet-fact-checking",
     "revision": "61ec51be1ca8270af4ec7ecb06d4e88a1431c488",
